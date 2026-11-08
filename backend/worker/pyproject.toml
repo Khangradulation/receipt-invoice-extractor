@@ -1,0 +1,23 @@
+[project]
+name = "receipt-worker"
+version = "0.1.0"
+description = "Event-driven processing worker: Cloud Storage events -> Gemini extraction -> validation -> BigQuery"
+requires-python = ">=3.12"
+dependencies = [
+    "receipt-shared",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+]
+
+[project.scripts]
+receipt-worker = "receipt_worker.main:run"
+
+[tool.uv.sources]
+receipt-shared = { workspace = true }
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/receipt_worker"]
