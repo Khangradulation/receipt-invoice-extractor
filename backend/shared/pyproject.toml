@@ -1,0 +1,17 @@
+[project]
+name = "receipt-shared"
+version = "0.1.0"
+description = "Shared configuration, logging and domain models for the receipt extractor services"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "starlette>=0.41",
+]
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/receipt_shared"]

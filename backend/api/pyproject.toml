@@ -1,0 +1,23 @@
+[project]
+name = "receipt-api"
+version = "0.1.0"
+description = "Public REST API: auth, upload URLs, documents, review and analytics"
+requires-python = ">=3.12"
+dependencies = [
+    "receipt-shared",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+]
+
+[project.scripts]
+receipt-api = "receipt_api.main:run"
+
+[tool.uv.sources]
+receipt-shared = { workspace = true }
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/receipt_api"]

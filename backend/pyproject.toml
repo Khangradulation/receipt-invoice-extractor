@@ -1,0 +1,66 @@
+[project]
+name = "receipt-backend"
+version = "0.1.0"
+description = "Workspace root for the receipt & invoice extractor backend services"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["shared", "api", "worker"]
+
+[tool.uv.sources]
+receipt-shared = { workspace = true }
+receipt-api = { workspace = true }
+receipt-worker = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "receipt-shared",
+    "receipt-api",
+    "receipt-worker",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "httpx>=0.28",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pip-audit>=2.7",
+]
+
+# ---------- Ruff ----------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["shared/src", "api/src", "worker/src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "S", "SIM", "RUF", "ASYNC", "DTZ", "PT"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101", "S105", "S106"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["receipt_shared", "receipt_api", "receipt_worker"]
+
+# ---------- mypy ----------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = ["shared/src", "api/src", "worker/src"]
+explicit_package_bases = true
+
+# ---------- pytest ----------
+[tool.pytest.ini_options]
+testpaths = ["shared/tests", "api/tests", "worker/tests"]
+addopts = "-ra --strict-markers --import-mode=importlib"
+filterwarnings = [
+    # Starlette's TestClient warns about httpx; harmless for tests.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
+markers = [
+    "integration: talks to real Google Cloud services (opt-in, may incur cost)",
+]
