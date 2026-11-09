@@ -7,6 +7,7 @@ import os
 import threading
 from datetime import UTC, datetime
 from importlib.metadata import version
+from typing import Any
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
@@ -35,8 +36,36 @@ def build_processor(settings: Settings) -> DocumentProcessor:
         storage=DocumentStorage(settings),
         extractor_factory=lambda: GeminiExtractor(settings),
         validator=DocumentValidator(settings=settings),
-        sink=None,  # BigQuery loading is added in Phase 6
+        sink=BigQuerySink(settings),
     )
+
+
+class BigQuerySink:
+    """Adapts the pipeline's AnalyticsSink protocol to the idempotent BigQuery writer."""
+
+    def __init__(self, settings: Settings) -> None:
+        from receipt_shared.analytics import BigQueryAnalyticsWriter
+
+        self._writer = BigQueryAnalyticsWriter(settings)
+
+    def record(
+        self,
+        record: Any,
+        *,
+        status: Any,
+        extraction: Any,
+        validation: Any,
+    ) -> None:
+        from receipt_shared.analytics import build_rows
+
+        rows = build_rows(
+            record,
+            status=status,
+            extraction=extraction,
+            validation=validation,
+            now=datetime.now(UTC),
+        )
+        self._writer.write(rows)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

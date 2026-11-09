@@ -58,8 +58,28 @@ def live() -> Iterator[dict[str, Any]]:
     app.state.token_verifier = TestUserVerifier()
     app.state.storage = DocumentStorage(settings)
     app.state.repository = FirestoreDocumentRepository.from_settings(settings)
+    from google.cloud import bigquery
+
+    from receipt_shared.analytics import qualified_dataset
+
+    bq = bigquery.Client(project=settings.gcp_project_id)
+    dataset = qualified_dataset(str(settings.gcp_project_id), settings.bigquery_dataset)
     created: list[str] = []
-    yield {"client": TestClient(app), "repo": app.state.repository, "created": created}
+    yield {
+        "client": TestClient(app),
+        "repo": app.state.repository,
+        "created": created,
+        "bq": bq,
+        "dataset": dataset,
+    }
+
+    for table in ("documents", "extracted_transactions", "line_items", "extraction_metrics"):
+        bq.query(
+            f"DELETE FROM `{dataset}.{table}` WHERE user_id = @u",  # noqa: S608
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[bigquery.ScalarQueryParameter("u", "STRING", user_id)]
+            ),
+        ).result()
 
     bucket = storage.Client(project=settings.gcp_project_id).bucket(settings.gcs_upload_bucket)
     for blob in bucket.list_blobs(prefix=f"uploads/{user_id}/", versions=True):
@@ -103,6 +123,22 @@ def wait_final(live: dict[str, Any], doc_id: str, timeout: float = 180) -> Any:
     pytest.fail(f"{doc_id} not processed in {timeout}s (last status: {record and record.status})")
 
 
+def bq_count(live: dict[str, Any], table: str, doc_id: str) -> int:
+    from google.cloud import bigquery
+
+    rows = (
+        live["bq"]
+        .query(
+            f"SELECT COUNT(*) AS n FROM `{live['dataset']}.{table}` WHERE document_id = @d",  # noqa: S608
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[bigquery.ScalarQueryParameter("d", "STRING", doc_id)]
+            ),
+        )
+        .result()
+    )
+    return int(next(iter(rows))["n"])
+
+
 def test_valid_receipt_is_processed_automatically(live: dict[str, Any]) -> None:
     doc_id = upload(live, "receipt_cafe.pdf")
     record = wait_final(live, doc_id)
@@ -116,6 +152,12 @@ def test_valid_receipt_is_processed_automatically(live: dict[str, Any]) -> None:
     assert record.extraction["document"]["total_amount"] == "26.68"
     assert record.extraction["document"]["merchant_name"] == "Maple Leaf Cafe"
     assert record.processing_duration_ms > 0
+    assert record.analytics_loaded_at is not None
+    # Loaded into BigQuery: approved transaction + its line items + metrics.
+    assert bq_count(live, "documents", doc_id) == 1
+    assert bq_count(live, "extracted_transactions", doc_id) == 1
+    assert bq_count(live, "line_items", doc_id) == 3
+    assert bq_count(live, "extraction_metrics", doc_id) == 1
     live["valid_doc"] = doc_id
 
 
@@ -126,6 +168,10 @@ def test_inconsistent_receipt_goes_to_review(live: dict[str, Any]) -> None:
     codes = [e["code"] for e in record.validation["validation_errors"]]
     assert "TOTAL_MISMATCH" in codes
     assert "total_amount" in record.validation["failed_fields"]
+    # Recorded for review-rate analytics, but never as an approved transaction.
+    assert bq_count(live, "documents", doc_id) == 1
+    assert bq_count(live, "extracted_transactions", doc_id) == 0
+    assert bq_count(live, "line_items", doc_id) == 0
 
 
 def test_same_file_again_is_duplicate(live: dict[str, Any]) -> None:
@@ -136,3 +182,4 @@ def test_same_file_again_is_duplicate(live: dict[str, Any]) -> None:
     record = wait_final(live, doc_id)
     assert record.status.value == "DUPLICATE"
     assert record.validation["duplicate_of"] == [first]
+    assert bq_count(live, "extracted_transactions", doc_id) == 0

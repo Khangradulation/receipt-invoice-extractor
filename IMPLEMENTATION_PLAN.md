@@ -15,7 +15,7 @@ A phase is only marked done after its deliverable has been verified.
 | 3 | Validation engine | Done — see Phase log |
 | 4 | Cloud Storage integration | Done — verified live (see Phase log) |
 | 5 | Eventarc + Cloud Run processing | Done — verified live (see Phase log) |
-| 6 | BigQuery data warehouse | Not started |
+| 6 | BigQuery data warehouse | Done — verified live (see Phase log) |
 | 7 | FastAPI backend | Not started |
 | 8 | React frontend | Not started |
 | 9 | Manual review workflow | Not started |
@@ -328,3 +328,44 @@ A phase is only marked done after its deliverable has been verified.
 - The API isn't deployed yet (Phase 7/11). Its signing permissions are already in place.
 
 **Next:** Phase 6 — BigQuery data warehouse.
+
+### Phase 6 — BigQuery data warehouse (2026-11-10)
+
+**Implemented** (details: [docs/analytics.md](docs/analytics.md))
+- `receipt_shared.analytics`:
+  - `schema.py`: single source of truth for the 5 tables. `sql/schema/*.sql` is generated from it
+    (`make sql-schema`), with a drift test.
+  - `rows.py`: pure row builders (approved-only transactions; exact decimals).
+  - `bigquery.py`: one multi-statement transaction per document (MERGE + replace line items,
+    rollback on error, retryable error classification).
+  - `queries.py` + `sql/*.sql`: 10 analytics queries.
+- Worker: a BigQuery sink records every outcome. The write happens before the final Firestore
+  status (retried on failure); FAILED documents are recorded best effort. New
+  `analytics_loaded_at` field.
+- GCP: `ops/gcp/bootstrap-bigquery.sh` creates dataset `receipt_analytics` (US), the 5 partitioned
+  and clustered tables, dataset access entries (worker WRITER, API READER) and `bigquery.jobUser`
+  for both. Worker redeployed as `receipt-worker-00002`.
+- New sample-independent live tests: `make test-bigquery-live`; `make test-pipeline-live` now also
+  checks BigQuery.
+
+**Verification (actual results)**
+- Unit tests: 323 passed (schema drift, row building, script structure, error classification,
+  query parameters, worker analytics retry/best-effort).
+- **Live BigQuery** (`make test-bigquery-live`): 12/12 passed. A write replayed twice leaves 1 row
+  in each table (2 line items); re-writing as REVIEW_REQUIRED removes the transaction and line
+  items; amounts come back exact (`26.68`, `3.48`); all 10 queries run on real data.
+- **Live end-to-end** (`make test-pipeline-live`): 3/3 passed on the redeployed worker:
+  - VALID → `documents` 1, `extracted_transactions` 1, `line_items` 3, `extraction_metrics` 1;
+  - REVIEW_REQUIRED → `documents` only;
+  - DUPLICATE → no transaction.
+- Worker logs: no warnings or errors. Test rows deleted afterwards.
+
+**Known issues**
+- The BigQuery write takes about 10 s per document (multi-statement transaction), raising total
+  processing time from about 5 s to about 18 s. It's asynchronous, so users don't wait on it.
+  Batching or the Storage Write API with a periodic MERGE could cut this later.
+- `bq add-iam-policy-binding` on datasets needs allowlisting, and the `bq` CLI mis-parses
+  hyphenated project ids; the bootstrap uses dataset access entries via the Python client instead.
+- No currency conversion: totals are reported per currency.
+
+**Next:** Phase 7 — FastAPI backend.
