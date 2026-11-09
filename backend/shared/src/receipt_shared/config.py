@@ -74,6 +74,12 @@ class Settings(BaseSettings):
     # None = model default. 0 disables thinking on models that allow it (lower latency/cost).
     gemini_thinking_budget: int | None = None
 
+    # Worker
+    # How long a processing claim is held; a crashed attempt can be retaken after it expires.
+    worker_lease_seconds: int = Field(default=360, ge=30)
+    # Transient failures (Gemini 5xx/429/timeouts) are retried by Eventarc up to this many times.
+    max_processing_attempts: int = Field(default=5, ge=1)
+
     # Validation
     # Absolute tolerance for subtotal/tax/discount vs. total (at least one currency minor unit).
     money_tolerance: Decimal = Field(default=Decimal("0.02"), ge=0)

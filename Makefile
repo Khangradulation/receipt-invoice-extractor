@@ -3,7 +3,7 @@
 BACKEND := backend
 FRONTEND := frontend
 
-.PHONY: help install api worker web check test lint format backend-check frontend-check docker-build samples extract test-gemini-live test-storage-live
+.PHONY: help install api worker web check test lint format backend-check frontend-check docker-build samples extract test-gemini-live test-storage-live test-pipeline-live
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -46,6 +46,9 @@ test-gemini-live: samples ## Run live Gemini integration tests (billable; needs 
 
 test-storage-live: samples ## Live Cloud Storage + Firestore round trip (needs bucket + ADC)
 	cd $(BACKEND) && RUN_GCP_INTEGRATION=1 uv run pytest -m integration -v shared/tests/integration/test_storage_live.py
+
+test-pipeline-live: samples ## Live upload -> Eventarc -> worker -> Gemini (billable; needs deploy)
+	cd $(BACKEND) && RUN_PIPELINE_INTEGRATION=1 uv run pytest -m integration -v shared/tests/integration/test_pipeline_live.py
 
 format: ## Auto-format backend and frontend
 	cd $(BACKEND) && uv run ruff format . ../evaluation ../ops && uv run ruff check --fix . ../evaluation ../ops

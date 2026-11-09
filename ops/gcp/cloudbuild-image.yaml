@@ -1,0 +1,12 @@
+# Builds one backend image with BuildKit and pushes it to Artifact Registry.
+#   gcloud builds submit backend --config ops/gcp/cloudbuild-image.yaml \
+#     --substitutions=_SERVICE=worker,_IMAGE=us-central1-docker.pkg.dev/PROJECT/receipt-extractor/worker:TAG
+steps:
+  - name: gcr.io/cloud-builders/docker
+    env: ["DOCKER_BUILDKIT=1"]
+    args: ["build", "-f", "${_SERVICE}/Dockerfile", "-t", "${_IMAGE}", "."]
+images: ["${_IMAGE}"]
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+timeout: 1200s

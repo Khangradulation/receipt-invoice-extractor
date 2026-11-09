@@ -45,9 +45,9 @@ def test_in_memory_rejects_duplicate_ids() -> None:
 
 
 def test_firestore_round_trip_keeps_extra_fields() -> None:
-    data = record().to_firestore() | {"validation": {"is_valid": True}}
+    data = record().to_firestore() | {"review": {"corrections": []}}
     back = DocumentRecord.from_firestore(data)
-    assert back.model_extra == {"validation": {"is_valid": True}}
+    assert back.model_extra == {"review": {"corrections": []}}
     assert back.created_at == datetime(2026, 11, 9, tzinfo=UTC)
 
 
