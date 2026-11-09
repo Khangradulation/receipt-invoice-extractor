@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # Cloud Storage
     gcs_upload_bucket: str | None = None
     signed_url_ttl_seconds: int = Field(default=900, ge=60, le=3600)
+    # Service account that signs upload/download URLs (via IAM signBlob). On Cloud Run this is the
+    # API's own account; locally, the developer needs Token Creator on it.
+    signing_service_account: str | None = None
     # Documents are sent to Gemini inline (base64) and Vertex AI caps inline request size at
     # ~20 MB, so the default leaves headroom for base64 overhead.
     max_upload_bytes: int = Field(default=15 * 1024 * 1024, gt=0)
@@ -54,6 +57,7 @@ class Settings(BaseSettings):
 
     # Firestore
     firestore_database: str = "(default)"
+    firestore_documents_collection: str = "documents"
 
     # BigQuery
     bigquery_dataset: str = "receipt_analytics"
@@ -119,6 +123,7 @@ class Settings(BaseSettings):
     @field_validator(
         "gcp_project_id",
         "gcs_upload_bucket",
+        "signing_service_account",
         "firebase_project_id",
         "gemini_thinking_budget",
         mode="before",

@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["http://localhost:5173"],
+    "method": ["PUT", "GET", "HEAD"],
+    "responseHeader": ["Content-Type", "x-goog-content-length-range", "x-goog-meta-sha256", "ETag"],
+    "maxAgeSeconds": 3600
+  }
+]
