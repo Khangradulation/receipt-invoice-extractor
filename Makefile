@@ -3,7 +3,7 @@
 BACKEND := backend
 FRONTEND := frontend
 
-.PHONY: help install api worker web check test lint format backend-check frontend-check docker-build
+.PHONY: help install api worker web check test lint format backend-check frontend-check docker-build samples extract test-gemini-live
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -22,8 +22,9 @@ web: ## Run the Vite dev server on :5173 (proxies /api to :8080)
 	cd $(FRONTEND) && npm run dev
 
 backend-check: ## Lint, format-check, type-check and test the backend
-	cd $(BACKEND) && uv run ruff check . && uv run ruff format --check . && \
-		uv run mypy shared/src api/src worker/src && uv run pytest
+	cd $(BACKEND) && uv run ruff check . ../evaluation ../ops && uv run ruff format --check . ../evaluation ../ops && \
+		uv run mypy shared/src api/src worker/src && uv run pytest && \
+		uv run pytest -q ../ops/budget-kill-switch
 
 frontend-check: ## Lint, format-check, type-check, test and build the frontend
 	cd $(FRONTEND) && npm run lint && npm run format:check && npm run typecheck && npm test && npm run build
@@ -34,8 +35,17 @@ test: ## Run backend and frontend unit tests
 	cd $(BACKEND) && uv run pytest
 	cd $(FRONTEND) && npm test
 
+samples: ## Generate synthetic sample receipts/invoices (+ ground truth) in evaluation/samples/out
+	cd $(BACKEND) && uv run python ../evaluation/samples/generate_samples.py
+
+extract: ## Extract with Gemini (billable): make extract FILES="path/a.pdf path/b.png"
+	cd $(BACKEND) && uv run receipt-extract $(abspath $(FILES))
+
+test-gemini-live: samples ## Run live Gemini integration tests (billable; needs GCP_PROJECT_ID + ADC)
+	cd $(BACKEND) && RUN_GEMINI_INTEGRATION=1 uv run pytest -m integration -v
+
 format: ## Auto-format backend and frontend
-	cd $(BACKEND) && uv run ruff format . && uv run ruff check --fix .
+	cd $(BACKEND) && uv run ruff format . ../evaluation ../ops && uv run ruff check --fix . ../evaluation ../ops
 	cd $(FRONTEND) && npm run format
 
 docker-build: ## Build all three production images (requires Docker BuildKit/buildx)

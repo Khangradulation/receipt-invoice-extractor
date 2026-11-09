@@ -51,7 +51,17 @@ make check
 Runs Ruff (lint + format check), mypy (strict), pytest, ESLint, Prettier check, `tsc`, Vitest and
 the production frontend build.
 
-## 5. Production-like containers (optional)
+## 5. Try the Gemini extraction engine
+
+```bash
+make samples                       # synthetic receipts/invoices in evaluation/samples/out
+cd backend && uv run receipt-extract --inspect-only ../evaluation/samples/out/*.pdf
+```
+
+`--inspect-only` runs the file checks without calling Gemini. Live extraction needs a GCP project
+with Vertex AI enabled and Application Default Credentials — see [extraction.md](extraction.md).
+
+## 6. Production-like containers (optional)
 
 ```bash
 docker compose up --build

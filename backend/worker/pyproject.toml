@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Event-driven processing worker: Cloud Storage events -> Gemini extraction -> validation -> BigQuery"
 requires-python = ">=3.12"
 dependencies = [
-    "receipt-shared",
+    "receipt-shared[extraction]",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
 ]

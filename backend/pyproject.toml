@@ -18,7 +18,7 @@ receipt-worker = { workspace = true }
 
 [dependency-groups]
 dev = [
-    "receipt-shared",
+    "receipt-shared[extraction]",
     "receipt-api",
     "receipt-worker",
     "pytest>=8.3",
@@ -41,9 +41,10 @@ ignore = []
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101", "S105", "S106"]
+"**/test_*.py" = ["S101", "S105", "S106"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["receipt_shared", "receipt_api", "receipt_worker"]
+known-first-party = ["receipt_shared", "receipt_api", "receipt_worker", "kill_switch"]
 
 # ---------- mypy ----------
 [tool.mypy]
@@ -56,10 +57,12 @@ explicit_package_bases = true
 # ---------- pytest ----------
 [tool.pytest.ini_options]
 testpaths = ["shared/tests", "api/tests", "worker/tests"]
-addopts = "-ra --strict-markers --import-mode=importlib"
+addopts = "-ra --strict-markers --import-mode=importlib -m 'not integration'"
 filterwarnings = [
     # Starlette's TestClient warns about httpx; harmless for tests.
     "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+    # Upstream bug in google-genai's types.py docstrings (invalid escape sequence).
+    "ignore:invalid escape sequence:SyntaxWarning",
 ]
 markers = [
     "integration: talks to real Google Cloud services (opt-in, may incur cost)",
