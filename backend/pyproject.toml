@@ -18,7 +18,7 @@ receipt-worker = { workspace = true }
 
 [dependency-groups]
 dev = [
-    "receipt-shared[extraction]",
+    "receipt-shared[extraction,gcp]",
     "receipt-api",
     "receipt-worker",
     "pytest>=8.3",
@@ -53,6 +53,11 @@ strict = true
 plugins = ["pydantic.mypy"]
 mypy_path = ["shared/src", "api/src", "worker/src"]
 explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+# Google Cloud client libraries and firebase-admin ship without type information.
+module = ["google.cloud.*", "firebase_admin.*"]
+ignore_missing_imports = true
 
 # ---------- pytest ----------
 [tool.pytest.ini_options]

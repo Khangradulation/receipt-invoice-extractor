@@ -4,7 +4,8 @@ version = "0.1.0"
 description = "Public REST API: auth, upload URLs, documents, review and analytics"
 requires-python = ">=3.12"
 dependencies = [
-    "receipt-shared",
+    "receipt-shared[gcp]",
+    "firebase-admin>=6.5",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
 ]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Mapping
 from importlib.metadata import version
 
 from fastapi import FastAPI, Request
@@ -12,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from receipt_api.routers import health
+from receipt_api.routers import documents, health
 from receipt_shared.config import Settings, get_settings
 from receipt_shared.http import ErrorBody, ErrorResponse, request_context_middleware
 from receipt_shared.logging import configure_logging
@@ -22,13 +23,33 @@ logger = logging.getLogger("receipt.api")
 API_PREFIX = "/api/v1"
 
 
-def _error(request: Request, status: int, code: str, message: str) -> JSONResponse:
+_ERROR_CODES = {
+    400: "bad_request",
+    401: "unauthorized",
+    403: "forbidden",
+    404: "not_found",
+    405: "method_not_allowed",
+    409: "conflict",
+    413: "file_too_large",
+    415: "unsupported_file_type",
+    429: "rate_limited",
+    503: "service_unavailable",
+}
+
+
+def _error(
+    request: Request,
+    status: int,
+    code: str,
+    message: str,
+    headers: Mapping[str, str] | None = None,
+) -> JSONResponse:
     body = ErrorResponse(
         error=ErrorBody(
             code=code, message=message, request_id=getattr(request.state, "request_id", None)
         )
     )
-    return JSONResponse(status_code=status, content=body.model_dump())
+    return JSONResponse(status_code=status, content=body.model_dump(), headers=headers)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -56,8 +77,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_exc(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-        code = "not_found" if exc.status_code == 404 else f"http_{exc.status_code}"
-        return _error(request, exc.status_code, code, str(exc.detail))
+        code = _ERROR_CODES.get(exc.status_code, f"http_{exc.status_code}")
+        return _error(request, exc.status_code, code, str(exc.detail), exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def _validation_exc(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -74,7 +95,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         return _error(request, 500, "internal_error", "An unexpected error occurred.")
 
+    app.state.settings = settings
     app.include_router(health.router, prefix=API_PREFIX)
+    app.include_router(documents.router, prefix=API_PREFIX)
     logger.info("api started", extra={"environment": settings.environment.value})
     return app
 

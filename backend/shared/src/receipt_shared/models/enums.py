@@ -13,6 +13,7 @@ class DocumentType(StrEnum):
 class DocumentStatus(StrEnum):
     """Operational state of a document, stored in Firestore."""
 
+    AWAITING_UPLOAD = "AWAITING_UPLOAD"  # upload URL issued; file not received yet
     UPLOADED = "UPLOADED"
     PROCESSING = "PROCESSING"
     EXTRACTED = "EXTRACTED"
@@ -35,6 +36,7 @@ _TERMINAL = frozenset(
 # Allowed state transitions. REVIEW_REQUIRED is resolved by a human (APPROVED / REJECTED).
 # FAILED -> PROCESSING allows an explicit reprocess of a new object generation.
 ALLOWED_TRANSITIONS: dict[DocumentStatus, frozenset[DocumentStatus]] = {
+    DocumentStatus.AWAITING_UPLOAD: frozenset({DocumentStatus.UPLOADED, DocumentStatus.FAILED}),
     DocumentStatus.UPLOADED: frozenset({DocumentStatus.PROCESSING, DocumentStatus.FAILED}),
     DocumentStatus.PROCESSING: frozenset({DocumentStatus.EXTRACTED, DocumentStatus.FAILED}),
     DocumentStatus.EXTRACTED: frozenset({DocumentStatus.VALIDATING, DocumentStatus.FAILED}),

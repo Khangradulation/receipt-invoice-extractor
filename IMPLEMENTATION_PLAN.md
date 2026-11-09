@@ -13,7 +13,7 @@ A phase is only marked done after its deliverable has been verified.
 | 1 | Project initialization | Done — see Phase log |
 | 2 | Gemini extraction engine | Done — verified live on Vertex AI (see Phase log) |
 | 3 | Validation engine | Done — see Phase log |
-| 4 | Cloud Storage integration | Not started |
+| 4 | Cloud Storage integration | Done — verified live (see Phase log) |
 | 5 | Eventarc + Cloud Run processing | Not started |
 | 6 | BigQuery data warehouse | Not started |
 | 7 | FastAPI backend | Not started |
@@ -240,3 +240,43 @@ A phase is only marked done after its deliverable has been verified.
   `duplicate_acknowledged`.
 
 **Next:** Phase 4 — Cloud Storage integration.
+
+### Phase 4 — Cloud Storage integration (2026-11-09)
+
+**Implemented** (details: [docs/storage.md](docs/storage.md))
+- GCP (via `ops/gcp/bootstrap-storage.sh`, idempotent): private bucket
+  `receipt-extractor-lkmljr-documents` (us-central1, public access prevention enforced, uniform
+  access, versioning, lifecycle, CORS, labels); Firestore `(default)` Native database in
+  us-central1; `receipt-api` service account with bucket-scoped object create/view,
+  `datastore.user`, and Token Creator on itself; the developer has Token Creator for local signing.
+- `receipt_shared.files`: supported types and MIME normalisation (shared by the API and extraction).
+- `receipt_shared.storage`: object paths and filename sanitisation, `DocumentStorage` (V4 signed
+  PUT/GET via IAM signBlob, size-capped CRC32C-checked reads), and `storage.verify.verify_upload`
+  (size, magic bytes, integrity, limits, optional SHA-256).
+- `receipt_shared.repository`: `DocumentRecord` plus Firestore and in-memory repositories.
+- New `AWAITING_UPLOAD` status (→ UPLOADED / FAILED).
+- API: Firebase ID-token auth dependency (`receipt_api.auth`), lazily-built clients
+  (`receipt_api.deps`), `POST /api/v1/documents/upload-url`. The error handler now keeps
+  `WWW-Authenticate` and uses named error codes.
+
+**Verification (actual results)**
+- Unit tests: 242 passed in total (paths, signing, integrity, repository, endpoint auth/validation,
+  Firebase verifier).
+- **Live** (`make test-storage-live`): 4/4 passed against the real bucket and Firestore. Covered:
+  upload via signed URL, record contents, read-back and integrity verification, signed download,
+  anonymous access denied, wrong content type → 403, wrong size → 400, URL reused for another path
+  → 403. Test data cleaned up; leftovers from two earlier failed runs were found and removed.
+- Bugs found by the live run and fixed: google-cloud-storage 3.x removed the `generation` argument
+  from `download_as_bytes()` and `Blob.delete()`. The unit-test fake now uses the real signature.
+- The API Docker image builds and runs (352 MB, up from 261 MB because of firebase-admin and the
+  GCP libraries); an unauthenticated upload-url request returns 401.
+
+**Not verified / known gaps**
+- **Real Firebase sign-in has not been exercised.** Firebase Auth isn't enabled on the project yet,
+  and the local emulator needs Java, which isn't installed. Token verification is unit-tested with
+  firebase-admin's error types; live sign-in comes with the login page (Phase 7/8).
+- Records left in `AWAITING_UPLOAD` when an upload never happens need expiring (Phase 5/13).
+- Bucket CORS only allows `http://localhost:5173`; the deployed frontend origin is added in Phase 11.
+- Resources were created with gcloud; Phase 11 imports them into Terraform.
+
+**Next:** Phase 5 — Eventarc and Cloud Run processing.

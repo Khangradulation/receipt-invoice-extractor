@@ -17,6 +17,12 @@ extraction = [
     "pillow>=11.0",
 ]
 
+# Cloud Storage + Firestore clients (API and worker).
+gcp = [
+    "google-cloud-storage>=2.18",
+    "google-cloud-firestore>=2.19",
+]
+
 [project.scripts]
 receipt-extract = "receipt_shared.extraction.cli:main"
 

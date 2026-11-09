@@ -25,13 +25,16 @@ from receipt_shared.extraction.errors import (
     TooManyPagesError,
     UnsupportedFileTypeError,
 )
+from receipt_shared.files import (
+    EXTENSION_MIME,
+    JPEG,
+    PDF,
+    PNG,
+    SUPPORTED_MIME_TYPES,
+    normalize_mime,
+)
 
-PDF = "application/pdf"
-PNG = "image/png"
-JPEG = "image/jpeg"
-SUPPORTED_MIME_TYPES: frozenset[str] = frozenset({PDF, PNG, JPEG})
-
-EXTENSION_MIME: dict[str, str] = {".pdf": PDF, ".png": PNG, ".jpg": JPEG, ".jpeg": JPEG}
+__all__ = ["JPEG", "PDF", "PNG", "SUPPORTED_MIME_TYPES", "DocumentInput", "inspect_document"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,9 +133,7 @@ def inspect_document(
             )
 
     if declared_mime_type is not None:
-        declared = declared_mime_type.split(";", 1)[0].strip().lower()
-        if declared == "image/jpg":
-            declared = JPEG
+        declared = normalize_mime(declared_mime_type)
         if declared != mime:
             raise UnsupportedFileTypeError(
                 f"File content ({mime}) does not match the declared type '{declared}'."
