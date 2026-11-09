@@ -278,3 +278,47 @@ def test_non_upload_objects_other_buckets_and_event_types_are_ignored(env: Env) 
         == "ignored_event_type"
     )
     assert env.extractor.calls == []
+
+
+# --- analytics ---------------------------------------------------------------------------------
+def test_every_outcome_is_recorded_in_analytics(env: Env) -> None:
+    _, e1 = env.upload(png("white"))
+    _, e2 = env.upload(png("gray"))
+    env.processor.handle(e1)
+    env.extractor.default = good_document(merchant_name="Other Shop", total_amount=Decimal("99.00"))
+    env.processor.handle(e2)
+    assert [s for _, s in env.sink.records] == [
+        DocumentStatus.VALID,
+        DocumentStatus.REVIEW_REQUIRED,
+    ]
+
+
+def test_analytics_failure_retries_and_does_not_finalise(env: Env) -> None:
+    doc_id, event = env.upload()
+    env.sink.fail_next = 1
+    first = env.processor.handle(event)
+    assert (first.http_status, first.result) == (503, "retry")
+    record = env.repo.get(doc_id)
+    assert record is not None
+    assert record.status is DocumentStatus.VALIDATING  # not finalised
+    assert record.last_error is not None
+    assert record.last_error["code"] == "bigquery_write_failed"
+
+    second = env.processor.handle(event)
+    assert second.status is DocumentStatus.VALID
+    assert env.extractor.calls == [doc_id]  # Gemini not called again
+    assert env.sink.loaded == [doc_id]
+    final = env.repo.get(doc_id)
+    assert final is not None
+    assert final.analytics_loaded_at is not None
+
+
+def test_failed_documents_are_recorded_best_effort(env: Env) -> None:
+    env.extractor.outcomes = [ModelResponseError("refused")]
+    env.sink.fail_next = 1  # analytics down as well
+    doc_id, event = env.upload()
+    outcome = env.processor.handle(event)
+    assert (outcome.http_status, outcome.status) == (200, DocumentStatus.FAILED)
+    record = env.repo.get(doc_id)
+    assert record is not None
+    assert record.status is DocumentStatus.FAILED

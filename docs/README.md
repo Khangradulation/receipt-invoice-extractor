@@ -8,3 +8,4 @@ Architecture, setup, deployment, security and evaluation docs. Each phase adds t
 - [validation.md](validation.md) — validation engine and outcomes
 - [storage.md](storage.md) — uploads, bucket layout and security controls
 - [processing.md](processing.md) — event-driven worker, idempotency and retries
+- [analytics.md](analytics.md) — BigQuery schema, idempotent writes and analytics queries

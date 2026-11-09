@@ -104,10 +104,21 @@ class FakeExtractor:
 
 class RecordingSink:
     def __init__(self) -> None:
-        self.loaded: list[str] = []
+        self.records: list[tuple[str, DocumentStatus]] = []
+        self.fail_next = 0
 
-    def load(self, record: DocumentRecord, extraction: ExtractionResult) -> None:
-        self.loaded.append(record.document_id)
+    def record(
+        self, record: DocumentRecord, *, status: DocumentStatus, extraction: Any, validation: Any
+    ) -> None:
+        if self.fail_next:
+            self.fail_next -= 1
+            raise RuntimeError("bigquery unavailable")
+        self.records.append((record.document_id, status))
+
+    @property
+    def loaded(self) -> list[str]:
+        """Documents published as approved transactions."""
+        return [d for d, s in self.records if s is DocumentStatus.VALID]
 
 
 class Env:

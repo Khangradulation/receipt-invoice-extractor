@@ -68,10 +68,17 @@ class Extractor(Protocol):
     ) -> ExtractionResult: ...
 
 
-class ValidSink(Protocol):
-    """Destination for VALID records (BigQuery, Phase 6)."""
+class AnalyticsSink(Protocol):
+    """Analytics destination (BigQuery). Must be idempotent per document."""
 
-    def load(self, record: DocumentRecord, extraction: ExtractionResult) -> None: ...
+    def record(
+        self,
+        record: DocumentRecord,
+        *,
+        status: DocumentStatus,
+        extraction: ExtractionResult | None,
+        validation: ValidationResult | None,
+    ) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -107,7 +114,7 @@ class DocumentProcessor:
         storage: ObjectReader,
         extractor_factory: Callable[[], Extractor],
         validator: DocumentValidator,
-        sink: ValidSink | None = None,
+        sink: AnalyticsSink | None = None,
     ) -> None:
         self._settings = settings
         self._repo = repository
@@ -157,6 +164,13 @@ class DocumentProcessor:
                 else logging.INFO
             )
             logger.log(level, "event not processed", extra=ctx | {"claim": claim.outcome.value})
+            if claim.outcome is ClaimOutcome.GAVE_UP and claim.record is not None:
+                gave_up = ValidationResult.processing_failed(
+                    "Processing failed too many times.", rules_version=RULES_VERSION
+                )
+                self._record_analytics(
+                    claim.record, DocumentStatus.FAILED, None, gave_up, ctx, required=False
+                )
             status = claim.record.status if claim.record else None
             return Outcome(200, claim.outcome.value, path.document_id, status)
 
@@ -192,20 +206,35 @@ class DocumentProcessor:
                 duplicate_index=RepositoryDuplicateIndex(self._repo),
             )
             final = _FINAL_STATUS[validation.validation_status]
-            if final is DocumentStatus.VALID and self._sink is not None:
-                self._sink.load(record, extraction)
-
             now = _now()
             started = record.processing_started_at or now
+            completion = {
+                "completed_at": now,
+                "processing_duration_ms": round((now - started).total_seconds() * 1000, 1),
+                "page_count": document.page_count,
+                "file_sha256": document.sha256,
+                "extracted_at": record.extracted_at or now,
+            }
+            # Analytics first: if BigQuery fails, the document is not finalised and the event is
+            # retried (the write is idempotent), so Firestore and BigQuery cannot drift apart.
+            self._record_analytics(
+                record.model_copy(update=completion),
+                final,
+                extraction,
+                validation,
+                ctx,
+                required=True,
+            )
             self._repo.update(
                 doc_id,
                 {
                     "status": final,
                     "validation": validation.model_dump(mode="json"),
                     "completed_at": now,
-                    "processing_duration_ms": round((now - started).total_seconds() * 1000, 1),
+                    "processing_duration_ms": completion["processing_duration_ms"],
                     "lease_expires_at": None,
                     "last_error": None,
+                    "analytics_loaded_at": _now() if self._sink is not None else None,
                 },
                 history=[history_entry(final, now)],
             )
@@ -308,6 +337,27 @@ class DocumentProcessor:
         )
         return result
 
+    # -- analytics ---------------------------------------------------------------------------
+    def _record_analytics(
+        self,
+        record: DocumentRecord,
+        status: DocumentStatus,
+        extraction: ExtractionResult | None,
+        validation: ValidationResult | None,
+        ctx: dict[str, Any],
+        *,
+        required: bool,
+    ) -> None:
+        if self._sink is None:
+            return
+        try:
+            self._sink.record(record, status=status, extraction=extraction, validation=validation)
+        except Exception as exc:
+            if required:
+                raise _TransientError("bigquery_write_failed", type(exc).__name__) from exc
+            # Best effort for failures: the document is already being marked FAILED.
+            logger.exception("analytics write failed (best effort)", extra=ctx)
+
     # -- failure handling --------------------------------------------------------------------
     def _fail(self, record: DocumentRecord, code: str, message: str, ctx: dict[str, Any]) -> None:
         now = _now()
@@ -324,6 +374,8 @@ class DocumentProcessor:
             history=[history_entry(DocumentStatus.FAILED, now, code)],
         )
         logger.warning("processing failed permanently", extra=ctx | {"error_code": code})
+        failed = record.model_copy(update={"last_error": {"code": code}, "completed_at": now})
+        self._record_analytics(failed, DocumentStatus.FAILED, None, result, ctx, required=False)
 
     def _release(
         self,

@@ -58,6 +58,7 @@ class DocumentRecord(BaseModel):
     processing_duration_ms: float | None = None
     last_error: dict[str, Any] | None = None
     model_version: str | None = None
+    analytics_loaded_at: datetime | None = None
     # Original AI output (never overwritten) and validation result, stored as JSON-safe dicts.
     extraction: dict[str, Any] | None = None
     validation: dict[str, Any] | None = None
