@@ -49,6 +49,8 @@ class Doc:
     discount: Decimal | None = None
     expense_category: str = "other"
     extra_lines: list[str] = field(default_factory=list)
+    # Printed total when it deliberately disagrees with subtotal + tax (validation test cases).
+    printed_total: Decimal | None = None
 
     @property
     def subtotal(self) -> Decimal:
@@ -61,6 +63,8 @@ class Doc:
 
     @property
     def total(self) -> Decimal:
+        if self.printed_total is not None:
+            return self.printed_total
         return self.subtotal - (self.discount or Decimal("0")) + self.tax
 
     def ground_truth(self) -> dict[str, object]:
@@ -261,6 +265,31 @@ SAMPLES: list[Doc] = [
         ],
     ),
 ]
+
+
+SAMPLES.append(
+    Doc(
+        name="receipt_total_mismatch",
+        document_type="receipt",
+        merchant_name="Harbour Books & Coffee",
+        merchant_address="77 Water Street, St. John's, NL A1C 1A1, Canada",
+        document_number="HB-2291",
+        document_date="2026-09-03",
+        currency="CAD",
+        symbol="$",
+        tax_rate=Decimal("0.15"),
+        tax_label="HST",
+        items=[
+            Item("Paperback novel", Decimal("1"), Decimal("18.99")),
+            Item("Americano", Decimal("1"), Decimal("3.50")),
+        ],
+        payment_method="debit_card",
+        payment_line="Debit ****7710",
+        expense_category="other",
+        # Subtotal 22.49 + HST 3.37 = 25.86, but the receipt prints 28.86.
+        printed_total=Decimal("28.86"),
+    )
+)
 
 
 def main() -> None:

@@ -1,24 +1,42 @@
-"""FastAPI application factory for the processing worker.
-
-The worker is invoked by Eventarc (CloudEvents over HTTP) and is not publicly reachable.
-The CloudEvents receiver and processing pipeline are added in Phase 5.
-"""
+"""FastAPI application for the processing worker (invoked by Eventarc; not public)."""
 
 from __future__ import annotations
 
 import logging
 import os
+import threading
 from datetime import UTC, datetime
 from importlib.metadata import version
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 
 from receipt_shared.config import Settings, get_settings
 from receipt_shared.http import request_context_middleware
 from receipt_shared.logging import configure_logging
 from receipt_shared.models import HealthResponse
+from receipt_worker.events import InvalidEventError, parse_storage_event
+from receipt_worker.pipeline import DocumentProcessor
 
 logger = logging.getLogger("receipt.worker")
+_lock = threading.Lock()
+
+
+def build_processor(settings: Settings) -> DocumentProcessor:
+    """Wire the real Firestore / Cloud Storage / Gemini implementations."""
+    from receipt_shared.extraction import GeminiExtractor
+    from receipt_shared.repository import FirestoreDocumentRepository
+    from receipt_shared.storage import DocumentStorage
+    from receipt_shared.validation import DocumentValidator
+
+    return DocumentProcessor(
+        settings,
+        repository=FirestoreDocumentRepository.from_settings(settings),
+        storage=DocumentStorage(settings),
+        extractor_factory=lambda: GeminiExtractor(settings),
+        validator=DocumentValidator(settings=settings),
+        sink=None,  # BigQuery loading is added in Phase 6
+    )
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -28,11 +46,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="Receipt & Invoice Extractor Worker",
         version=version("receipt-worker"),
-        # The worker is internal; keep the schema available for local debugging only.
         docs_url="/docs" if settings.environment.value == "local" else None,
         redoc_url=None,
     )
+    app.state.settings = settings
     app.middleware("http")(request_context_middleware)
+
+    def processor() -> DocumentProcessor:
+        with _lock:
+            proc: DocumentProcessor | None = getattr(app.state, "processor", None)
+            if proc is None:
+                proc = build_processor(settings)
+                app.state.processor = proc
+        return proc
 
     @app.get("/health", response_model=HealthResponse, tags=["health"])
     def health() -> HealthResponse:
@@ -41,6 +67,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             version=version("receipt-worker"),
             environment=settings.environment.value,
             timestamp=datetime.now(UTC),
+        )
+
+    @app.post("/events/storage", tags=["events"])
+    async def storage_event(request: Request) -> Response:
+        body = await request.body()
+        try:
+            event = parse_storage_event(request.headers, body)
+        except InvalidEventError as exc:
+            # A malformed event can never succeed; acknowledge it (2xx) so it is not redelivered
+            # forever, and log at ERROR so it is visible in monitoring.
+            logger.error("malformed event ignored", extra={"reason": str(exc)})
+            return JSONResponse({"result": "malformed_event"}, status_code=200)
+
+        from starlette.concurrency import run_in_threadpool
+
+        outcome = await run_in_threadpool(processor().handle, event)
+        return JSONResponse(
+            {
+                "result": outcome.result,
+                "document_id": outcome.document_id,
+                "status": outcome.status.value if outcome.status else None,
+            },
+            status_code=outcome.http_status,
         )
 
     logger.info("worker started", extra={"environment": settings.environment.value})

@@ -14,7 +14,7 @@ A phase is only marked done after its deliverable has been verified.
 | 2 | Gemini extraction engine | Done — verified live on Vertex AI (see Phase log) |
 | 3 | Validation engine | Done — see Phase log |
 | 4 | Cloud Storage integration | Done — verified live (see Phase log) |
-| 5 | Eventarc + Cloud Run processing | Not started |
+| 5 | Eventarc + Cloud Run processing | Done — verified live (see Phase log) |
 | 6 | BigQuery data warehouse | Not started |
 | 7 | FastAPI backend | Not started |
 | 8 | React frontend | Not started |
@@ -280,3 +280,51 @@ A phase is only marked done after its deliverable has been verified.
 - Resources were created with gcloud; Phase 11 imports them into Terraform.
 
 **Next:** Phase 5 — Eventarc and Cloud Run processing.
+
+### Phase 5 — Eventarc + Cloud Run processing (2026-11-09)
+
+**Implemented** (details: [docs/processing.md](docs/processing.md))
+- Worker (`receipt_worker`):
+  - `events.py`: CloudEvents parser (binary and structured mode).
+  - `pipeline.py`: `DocumentProcessor`, which claims, verifies, extracts, validates and persists,
+    with permanent vs. transient error handling.
+  - `POST /events/storage`.
+- Repository: `decide_claim` (pure) plus transactional `claim` (Firestore) keyed by document id +
+  object generation with a lease; `update` with history; `find_duplicate_candidates`; and
+  `RepositoryDuplicateIndex` for the validator.
+- Statuses: added `DUPLICATE`; re-claim transitions for crashed attempts.
+- The original Gemini output is written once. A retry after a crash reuses it (no second call, no
+  overwrite).
+- Settings: `WORKER_LEASE_SECONDS`, `MAX_PROCESSING_ATTEMPTS`.
+- GCP (`ops/gcp/bootstrap-worker.sh`, `ops/gcp/deploy-worker.sh`, `ops/gcp/cloudbuild-image.yaml`):
+  - service accounts `receipt-worker`, `receipt-eventarc` and `receipt-build` (least privilege);
+  - Artifact Registry `receipt-extractor` with cleanup policies;
+  - Cloud Build (BuildKit) image build;
+  - Cloud Run `receipt-worker` (internal ingress, IAM-only, max 3 instances);
+  - Eventarc trigger on `object.finalized` for the documents bucket;
+  - subscription ack deadline 600 s with 10–600 s retry backoff.
+- Sample generator: added `receipt_total_mismatch` (printed total ≠ subtotal + tax).
+
+**Verification (actual results)**
+- Unit tests: 275 passed in total (35 worker tests covering events, the pipeline and the endpoint:
+  replays, an in-flight lease → 429, crash recovery, reuse of stored extraction, transient →
+  retry → success, giving up after max attempts, permanent failures, integrity failures, ignored
+  events).
+- Deploy: image built in 31 s, `receipt-worker-00001` serving; trigger, IAM and subscription
+  settings verified.
+- **Live end-to-end** (`make test-pipeline-live`): 3/3 passed with real upload → Eventarc → worker
+  → Gemini (`gemini-3.8-flash`) → Firestore:
+  - valid café receipt → VALID (history UPLOADED → PROCESSING → EXTRACTED → VALIDATING → VALID,
+    one attempt, 5.4 s);
+  - inconsistent receipt → REVIEW_REQUIRED (TOTAL_MISMATCH, 12.0 s);
+  - same file again → DUPLICATE, linked to the first (5.3 s).
+- Worker logs: no errors, no redeliveries, no document contents. Test data cleaned up.
+
+**Not verified / known gaps**
+- An event replay was not sent to the *deployed* worker (internal ingress blocks direct calls from
+  outside). Replays, in-flight duplicates and crash recovery are covered by unit tests.
+- BigQuery loading of VALID records is Phase 6 (the `ValidSink` hook exists but has no sink yet).
+- Expiring records stuck in `AWAITING_UPLOAD` is still open (Phase 13).
+- The API isn't deployed yet (Phase 7/11). Its signing permissions are already in place.
+
+**Next:** Phase 6 — BigQuery data warehouse.

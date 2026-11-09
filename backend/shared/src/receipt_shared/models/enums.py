@@ -22,6 +22,7 @@ class DocumentStatus(StrEnum):
     REVIEW_REQUIRED = "REVIEW_REQUIRED"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
+    DUPLICATE = "DUPLICATE"  # the exact same file was uploaded before
     FAILED = "FAILED"
 
     @property
@@ -30,20 +31,53 @@ class DocumentStatus(StrEnum):
 
 
 _TERMINAL = frozenset(
-    {DocumentStatus.VALID, DocumentStatus.APPROVED, DocumentStatus.REJECTED, DocumentStatus.FAILED}
+    {
+        DocumentStatus.VALID,
+        DocumentStatus.APPROVED,
+        DocumentStatus.REJECTED,
+        DocumentStatus.DUPLICATE,
+        DocumentStatus.FAILED,
+    }
+)
+
+# Statuses in which the worker is (or was, if it crashed) handling the document.
+IN_PROGRESS_STATUSES = frozenset(
+    {DocumentStatus.PROCESSING, DocumentStatus.EXTRACTED, DocumentStatus.VALIDATING}
+)
+# Statuses after which automatic processing is finished (human review may still follow).
+PROCESSING_DONE_STATUSES = frozenset(
+    {
+        DocumentStatus.VALID,
+        DocumentStatus.REVIEW_REQUIRED,
+        DocumentStatus.DUPLICATE,
+        DocumentStatus.APPROVED,
+        DocumentStatus.REJECTED,
+    }
 )
 
 # Allowed state transitions. REVIEW_REQUIRED is resolved by a human (APPROVED / REJECTED).
-# FAILED -> PROCESSING allows an explicit reprocess of a new object generation.
+# PROCESSING/EXTRACTED/VALIDATING -> PROCESSING: re-claim after a crashed attempt (lease expired).
+# FAILED -> PROCESSING: a new object generation is uploaded after a failure.
 ALLOWED_TRANSITIONS: dict[DocumentStatus, frozenset[DocumentStatus]] = {
     DocumentStatus.AWAITING_UPLOAD: frozenset({DocumentStatus.UPLOADED, DocumentStatus.FAILED}),
     DocumentStatus.UPLOADED: frozenset({DocumentStatus.PROCESSING, DocumentStatus.FAILED}),
-    DocumentStatus.PROCESSING: frozenset({DocumentStatus.EXTRACTED, DocumentStatus.FAILED}),
-    DocumentStatus.EXTRACTED: frozenset({DocumentStatus.VALIDATING, DocumentStatus.FAILED}),
+    DocumentStatus.PROCESSING: frozenset(
+        {DocumentStatus.PROCESSING, DocumentStatus.EXTRACTED, DocumentStatus.FAILED}
+    ),
+    DocumentStatus.EXTRACTED: frozenset(
+        {DocumentStatus.PROCESSING, DocumentStatus.VALIDATING, DocumentStatus.FAILED}
+    ),
     DocumentStatus.VALIDATING: frozenset(
-        {DocumentStatus.VALID, DocumentStatus.REVIEW_REQUIRED, DocumentStatus.FAILED}
+        {
+            DocumentStatus.PROCESSING,
+            DocumentStatus.VALID,
+            DocumentStatus.REVIEW_REQUIRED,
+            DocumentStatus.DUPLICATE,
+            DocumentStatus.FAILED,
+        }
     ),
     DocumentStatus.REVIEW_REQUIRED: frozenset({DocumentStatus.APPROVED, DocumentStatus.REJECTED}),
+    DocumentStatus.DUPLICATE: frozenset({DocumentStatus.REJECTED}),
     DocumentStatus.VALID: frozenset(),
     DocumentStatus.APPROVED: frozenset(),
     DocumentStatus.REJECTED: frozenset(),
