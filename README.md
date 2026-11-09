@@ -4,7 +4,7 @@ Event-driven pipeline using **Gemini on Vertex AI**, **Cloud Run** and **BigQuer
 validate and load structured receipt and invoice data — with a human-in-the-loop review queue for
 anything the validator does not trust.
 
-> **Status:** under active development. Phase 1 (project initialization) is complete; see
+> **Status:** under active development. Phases 1–2 (project setup, Gemini extraction engine) are complete; see
 > [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the phase-by-phase plan and progress.
 > Features below are the target design; this README is completed in Phase 16.
 

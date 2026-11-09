@@ -11,7 +11,7 @@ A phase is only marked done after its deliverable has been verified.
 | # | Phase | Status |
 |---|-------|--------|
 | 1 | Project initialization | Done — see Phase log |
-| 2 | Gemini extraction engine | Not started |
+| 2 | Gemini extraction engine | Done — verified live on Vertex AI (see Phase log) |
 | 3 | Validation engine | Not started |
 | 4 | Cloud Storage integration | Not started |
 | 5 | Eventarc + Cloud Run processing | Not started |
@@ -60,7 +60,7 @@ A phase is only marked done after its deliverable has been verified.
 - Prompt with explicit anti-hallucination and prompt-injection rules; document content passed as data parts, never concatenated into instructions.
 - File inspection: MIME sniffing by magic bytes, size limit, PDF page-count limit (`pypdf`).
 - `GeminiExtractor` with timeout, retries with exponential backoff and jitter on 429/5xx, structured logs (latency, model, token usage — no document contents).
-- CLI: `uv run extract path/to/receipt.pdf` for local testing against Vertex AI.
+- CLI: `uv run receipt-extract path/to/receipt.pdf` for local testing against Vertex AI.
 - Unit tests with a mocked client; an opt-in live test marked `integration`.
 
 ### Phase 3 — Validation engine (`receipt_shared.validation`)
@@ -146,3 +146,57 @@ A phase is only marked done after its deliverable has been verified.
 - Sidebar lists only implemented pages; remaining pages arrive in Phase 8.
 
 **Next:** Phase 2 — Gemini extraction engine.
+
+### Phase 2 — Gemini extraction engine (2026-11-08)
+
+**Implemented** (details: [docs/extraction.md](docs/extraction.md))
+- `receipt_shared.models.extraction`: Gemini-independent domain models (`ExtractedDocument`,
+  `LineItem`, `ExtractionMetadata`, `ExtractionResult`, expense-category and payment-method enums).
+- `receipt_shared.extraction` (installed via the `[extraction]` extra; the worker depends on it, the API does not):
+  - `documents.py`: magic-byte type detection, size / page / pixel limits, extension and declared
+    content-type mismatch rejection, encrypted/corrupt PDF and image detection, SHA-256.
+  - `prompt.py`: versioned system instruction covering accuracy and prompt-injection rules.
+  - `schema.py`: `GeminiExtraction` response schema plus `to_domain()` (exact `Decimal` money,
+    ISO dates, invalid values → null with warnings, `missing_fields` derived from nulls, output caps).
+  - `gemini.py`: Vertex AI client via `google-genai` 3.0 with per-attempt timeout, retries with
+    exponential backoff, full jitter and `Retry-After`, error classification, structured logs and
+    model/version/token metadata.
+  - `cli.py`: `receipt-extract` (`--inspect-only`, `--model`, `--location`).
+- `evaluation/samples/generate_samples.py`: synthetic receipts and invoices (PNG, JPEG, single- and
+  two-page PDF, prompt-injection case) with ground-truth JSON.
+- Settings: retry delays, output-token cap, optional thinking budget, image pixel limit.
+  `MAX_UPLOAD_BYTES` default lowered to 15 MiB to stay under Vertex AI's ~20 MB inline request limit.
+
+**Verification (actual results)**
+- `make check` exits 0: ruff and format clean, mypy strict clean (21 files), pytest 71 passed
+  (6 live integration tests deselected by default), frontend unchanged and passing.
+- Confirmed the SDK converts `GeminiExtraction` into a Vertex schema (nullable enums and numbers).
+- `receipt-extract --inspect-only` accepted all 7 generated samples (the invoice is correctly
+  detected as 2 pages); without `GCP_PROJECT_ID` the CLI exits 1 with a `configuration_error`.
+- Worker image built and imports the engine; the API image does not contain `google-genai`.
+
+**Live verification (2026-11-09)**
+- GCP project `receipt-extractor-lkmljr` created, with billing linked and Vertex AI enabled.
+- `gemini-2.5-flash` returned 404 (no longer available to new projects). The available models
+  were listed and probed: Gemini 3.x models return 404 in `us-central1` but work in the `global`
+  location. Defaults changed to `GEMINI_MODEL=gemini-3.8-flash`, `GEMINI_LOCATION=global`.
+- `make test-gemini-live`: **6 passed** against `gemini-3.8-flash`. Covered: the café receipt as
+  PNG, JPEG and PDF; the discount receipt; the 2-page EUR invoice (all 7 line items across pages,
+  exact subtotal/tax/total); and the prompt-injection receipt (real merchant and total extracted,
+  instruction not echoed).
+- Observed latency 5–10 s per document, about 3–4k tokens.
+- API errors now include Google's reason, e.g. `[BILLING_DISABLED] …`.
+
+**Known issues**
+- On the invoice, `payment_method` was set to `bank_transfer` from the payment *terms* line;
+  ground truth is null. To be measured in Phase 10 and possibly tightened in the prompt.
+- Extracted decimals keep the model's float form (`5809.0`, `1.0`); numerically exact, and
+  normalised for display/storage in later phases.
+
+**Cost guardrail** (`ops/budget-kill-switch/`)
+- $10 USD/month budget on the project (credits excluded, alerts at 50/90/100%). It publishes to
+  Pub/Sub, where a Cloud Run function detaches billing when cost ≥ budget. Least-privilege service
+  account, internal-only ingress. Verified in dry-run mode ($12 → "would disable") and armed
+  ($3 → "no action"). See the README there for recovery steps.
+
+**Next:** Phase 3 — validation engine.

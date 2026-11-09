@@ -46,8 +46,11 @@ class Settings(BaseSettings):
     # Cloud Storage
     gcs_upload_bucket: str | None = None
     signed_url_ttl_seconds: int = Field(default=900, ge=60, le=3600)
-    max_upload_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
+    # Documents are sent to Gemini inline (base64) and Vertex AI caps inline request size at
+    # ~20 MB, so the default leaves headroom for base64 overhead.
+    max_upload_bytes: int = Field(default=15 * 1024 * 1024, gt=0)
     max_pdf_pages: int = Field(default=10, gt=0)
+    max_image_pixels: int = Field(default=40_000_000, gt=0)  # decompression-bomb guard
 
     # Firestore
     firestore_database: str = "(default)"
@@ -57,10 +60,15 @@ class Settings(BaseSettings):
     bigquery_location: str = "US"
 
     # Gemini via Vertex AI
-    gemini_model: str = "gemini-2.5-flash"
-    gemini_location: str = "us-central1"
+    gemini_model: str = "gemini-3.8-flash"
+    gemini_location: str = "global"  # newer Gemini models are served from the global endpoint
     gemini_timeout_seconds: float = Field(default=120.0, gt=0)
     gemini_max_retries: int = Field(default=4, ge=0)
+    gemini_retry_initial_delay_seconds: float = Field(default=1.0, ge=0)
+    gemini_retry_max_delay_seconds: float = Field(default=30.0, ge=0)
+    gemini_max_output_tokens: int = Field(default=8192, gt=0)
+    # None = model default. 0 disables thinking on models that allow it (lower latency/cost).
+    gemini_thinking_budget: int | None = None
 
     # Validation
     money_tolerance: Decimal = Field(default=Decimal("0.02"), ge=0)
@@ -102,7 +110,13 @@ class Settings(BaseSettings):
             return [o.strip() for o in value.split(",") if o.strip()]
         return value
 
-    @field_validator("gcp_project_id", "gcs_upload_bucket", "firebase_project_id", mode="before")
+    @field_validator(
+        "gcp_project_id",
+        "gcs_upload_bucket",
+        "firebase_project_id",
+        "gemini_thinking_budget",
+        mode="before",
+    )
     @classmethod
     def _empty_to_none(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():
