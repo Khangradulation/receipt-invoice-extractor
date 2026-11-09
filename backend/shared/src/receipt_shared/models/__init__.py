@@ -15,8 +15,16 @@ from receipt_shared.models.extraction import (
     PaymentMethod,
 )
 from receipt_shared.models.health import HealthResponse
+from receipt_shared.models.validation import (
+    DocumentFingerprint,
+    Severity,
+    ValidationCode,
+    ValidationIssue,
+    ValidationResult,
+)
 
 __all__ = [
+    "DocumentFingerprint",
     "DocumentStatus",
     "DocumentType",
     "DuplicateStatus",
@@ -28,4 +36,8 @@ __all__ = [
     "LineItem",
     "PaymentMethod",
     "ProcessingOutcome",
+    "Severity",
+    "ValidationCode",
+    "ValidationIssue",
+    "ValidationResult",
 ]

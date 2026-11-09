@@ -12,7 +12,7 @@ A phase is only marked done after its deliverable has been verified.
 |---|-------|--------|
 | 1 | Project initialization | Done — see Phase log |
 | 2 | Gemini extraction engine | Done — verified live on Vertex AI (see Phase log) |
-| 3 | Validation engine | Not started |
+| 3 | Validation engine | Done — see Phase log |
 | 4 | Cloud Storage integration | Not started |
 | 5 | Eventarc + Cloud Run processing | Not started |
 | 6 | BigQuery data warehouse | Not started |
@@ -200,3 +200,43 @@ A phase is only marked done after its deliverable has been verified.
   ($3 → "no action"). See the README there for recovery steps.
 
 **Next:** Phase 3 — validation engine.
+
+### Phase 3 — Validation engine (2026-11-09)
+
+**Implemented** (details: [docs/validation.md](docs/validation.md))
+- `receipt_shared.models.validation`: `ValidationResult` (`is_valid`, `validation_status`,
+  `validation_errors`, `validation_warnings`, `failed_fields`, `duplicate_status`, `duplicate_of`,
+  `rules_version`), `ValidationIssue` (stable code, severity, message, fields),
+  `DocumentFingerprint`, and `ValidationResult.processing_failed()`.
+- `receipt_shared.validation`:
+  - `rules.py`: required and optional fields, document type, currency, dates, amounts, totals
+    reconciliation (standard, tax-inclusive, discount-in-subtotal), line-item arithmetic and sums,
+    invoice number.
+  - `duplicates.py`: exact file hash → DUPLICATE; merchant + number, or merchant + date + total +
+    currency → POSSIBLE_DUPLICATE (review). Per-user, earlier documents only, rejected/failed
+    ignored, normalised keys.
+  - `engine.py`: `DocumentValidator` runs the rules, carries over extraction warnings, applies
+    duplicate checks (with reviewer acknowledgement), and decides VALID / REVIEW_REQUIRED /
+    DUPLICATE.
+  - `config.py`: `ValidationConfig` from settings; tolerance never below the currency's minor unit.
+- New settings: `LINE_ITEM_TOLERANCE`, `FUTURE_DATE_TOLERANCE_DAYS`, `MAX_DOCUMENT_AGE_DAYS`,
+  `MAX_REASONABLE_AMOUNT`.
+
+**Verification (actual results)**
+- 105 validation unit tests, covering every rule, tolerance edges, JPY/KWD minor units, each
+  duplicate scenario (including simultaneous uploads and other users' files), and JSON round-trips.
+- `make check` exits 0 (backend 177 passed, kill switch 7 passed, frontend unchanged).
+- Ran the validator on the synthetic samples' ground truth: all 4 documents VALID. A re-photographed
+  café receipt (different file, same receipt) was flagged POSSIBLE_DUPLICATE and sent to review.
+
+**Design decisions**
+- Line-item mismatches are warnings, not errors, so line-item noise doesn't flood the review queue
+  (document totals are already checked as errors).
+- Possible duplicates go to review rather than being rejected, as the spec requires.
+
+**Not yet done (by design, later phases)**
+- Persisting results to Firestore and the Firestore-backed `DuplicateIndex` (Phase 5).
+- Revalidation of reviewer corrections (Phase 9) reuses `DocumentValidator` with
+  `duplicate_acknowledged`.
+
+**Next:** Phase 4 — Cloud Storage integration.

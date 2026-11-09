@@ -71,7 +71,13 @@ class Settings(BaseSettings):
     gemini_thinking_budget: int | None = None
 
     # Validation
+    # Absolute tolerance for subtotal/tax/discount vs. total (at least one currency minor unit).
     money_tolerance: Decimal = Field(default=Decimal("0.02"), ge=0)
+    # Tolerance when comparing the sum of line items with the document totals.
+    line_item_tolerance: Decimal = Field(default=Decimal("0.05"), ge=0)
+    future_date_tolerance_days: int = Field(default=1, ge=0)  # clock skew / time zones
+    max_document_age_days: int = Field(default=3650, gt=0)  # older dates are flagged, not rejected
+    max_reasonable_amount: Decimal = Field(default=Decimal("1000000"), gt=0)  # larger is flagged
     supported_currencies: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: [
             "USD",
