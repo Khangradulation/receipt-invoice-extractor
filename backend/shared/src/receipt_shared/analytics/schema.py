@@ -83,6 +83,20 @@ class Table:
             f"WHEN NOT MATCHED THEN INSERT ({names}) VALUES ({values});"
         )
 
+    def merge_from_json_array_sql(self, dataset: str, param: str) -> str:
+        """Insert elements of the JSON array ``@param`` whose key is not present (idempotent)."""
+        select = ",\n    ".join(f"{c.from_json('item')} AS {c.name}" for c in self.columns)
+        on = " AND ".join(f"T.{k} = S.{k}" for k in self.key)
+        names = ", ".join(self.column_names)
+        values = ", ".join(f"S.{c}" for c in self.column_names)
+        # Identifiers only (code constants + validated dataset); values come from @param.
+        return (
+            f"MERGE `{dataset}.{self.name}` T\n"  # noqa: S608
+            f"USING (SELECT\n    {select}\n  FROM UNNEST(JSON_QUERY_ARRAY(@{param})) AS item) S\n"
+            f"ON {on}\n"
+            f"WHEN NOT MATCHED THEN INSERT ({names}) VALUES ({values});"
+        )
+
     def insert_from_json_array_sql(self, dataset: str, param: str) -> str:
         """INSERT every element of the JSON array string ``@param``."""
         select = ",\n    ".join(f"{c.from_json('item')} AS {c.name}" for c in self.columns)

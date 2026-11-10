@@ -8,7 +8,9 @@ stored separately.
 
 from __future__ import annotations
 
+import base64
 import copy
+import json
 import threading
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -207,6 +209,45 @@ class DocumentRepository(Protocol):
         """The user's documents with the same file hash or the same merchant key."""
         ...
 
+    def list_for_user(
+        self,
+        user_id: str,
+        *,
+        statuses: list[DocumentStatus] | None = None,
+        limit: int = 20,
+        cursor: str | None = None,
+    ) -> Page:
+        """The user's documents, newest first, ``limit`` per page."""
+        ...
+
+
+@dataclass(frozen=True)
+class Page:
+    items: list[DocumentRecord]
+    next_cursor: str | None
+
+
+class InvalidCursorError(ValueError):
+    pass
+
+
+def encode_cursor(record: DocumentRecord) -> str:
+    raw = json.dumps({"c": record.created_at.isoformat(), "d": record.document_id})
+    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+
+
+def decode_cursor(cursor: str) -> tuple[datetime, str]:
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        data = json.loads(base64.urlsafe_b64decode(padded.encode()))
+        created = datetime.fromisoformat(data["c"])
+        doc_id = data["d"]
+        if not isinstance(doc_id, str):
+            raise TypeError
+    except (ValueError, KeyError, TypeError) as exc:
+        raise InvalidCursorError("invalid page cursor") from exc
+    return created, doc_id
+
 
 def _apply(
     data: dict[str, Any], changes: dict[str, Any], history: Iterable[dict[str, Any]], now: datetime
@@ -283,6 +324,42 @@ class InMemoryDocumentRepository:
                 or (merchant_key is not None and d.get("merchant_key") == merchant_key)
             )
         ]
+
+    def list_for_user(
+        self,
+        user_id: str,
+        *,
+        statuses: list[DocumentStatus] | None = None,
+        limit: int = 20,
+        cursor: str | None = None,
+    ) -> Page:
+        with self._lock:
+            items = [copy.deepcopy(d) for d in self._items.values()]
+        return _in_memory_list(items, user_id, statuses, limit, cursor)
+
+
+def _in_memory_list(
+    items: list[dict[str, Any]],
+    user_id: str,
+    statuses: list[DocumentStatus] | None,
+    limit: int,
+    cursor: str | None,
+) -> Page:
+    wanted = {s.value for s in statuses} if statuses else None
+    records = [
+        DocumentRecord.from_firestore(d)
+        for d in items
+        if d["user_id"] == user_id
+        and (wanted is None or getattr(d["status"], "value", d["status"]) in wanted)
+    ]
+    records.sort(key=lambda r: (r.created_at, r.document_id), reverse=True)
+    if cursor:
+        after = decode_cursor(cursor)
+        records = [r for r in records if (r.created_at, r.document_id) < after]
+    page = records[: limit + 1]
+    has_more = len(page) > limit
+    page = page[:limit]
+    return Page(page, encode_cursor(page[-1]) if has_more and page else None)
 
 
 class FirestoreDocumentRepository:
@@ -386,6 +463,37 @@ class FirestoreDocumentRepository:
             for snapshot in query.stream():
                 found[snapshot.id] = DocumentRecord.from_firestore(snapshot.to_dict())
         return list(found.values())
+
+    def list_for_user(
+        self,
+        user_id: str,
+        *,
+        statuses: list[DocumentStatus] | None = None,
+        limit: int = 20,
+        cursor: str | None = None,
+    ) -> Page:
+        """Newest first. Needs composite indexes (user_id, [status,] created_at, document_id)."""
+        from google.cloud import firestore
+        from google.cloud.firestore_v1.base_query import FieldFilter
+
+        query = self._collection.where(filter=FieldFilter("user_id", "==", user_id))
+        if statuses:
+            values = [s.value for s in statuses]
+            query = (
+                query.where(filter=FieldFilter("status", "==", values[0]))
+                if len(values) == 1
+                else query.where(filter=FieldFilter("status", "in", values))
+            )
+        query = query.order_by("created_at", direction=firestore.Query.DESCENDING).order_by(
+            "document_id", direction=firestore.Query.DESCENDING
+        )
+        if cursor:
+            created, doc_id = decode_cursor(cursor)
+            query = query.start_after({"created_at": created, "document_id": doc_id})
+        snapshots = list(query.limit(limit + 1).stream())
+        records = [DocumentRecord.from_firestore(s.to_dict()) for s in snapshots[:limit]]
+        has_more = len(snapshots) > limit
+        return Page(records, encode_cursor(records[-1]) if has_more and records else None)
 
 
 # --- duplicate index adapter -------------------------------------------------------------------

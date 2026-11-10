@@ -1,4 +1,4 @@
-"""Document endpoints (Phase 4: upload URL issuance)."""
+"""Document endpoints: upload URL, listing, details, status, extraction, file URL."""
 
 from __future__ import annotations
 
@@ -7,15 +7,30 @@ import re
 import uuid
 from datetime import datetime
 from pathlib import PurePath
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 
-from receipt_api.auth import CurrentUserDep
-from receipt_api.deps import RepositoryDep, SettingsDep, StorageDep
+from receipt_api.auth import CurrentUser
+from receipt_api.deps import RepositoryDep, ReviewServiceDep, SettingsDep, StorageDep
+from receipt_api.ownership import owned_record
+from receipt_api.ratelimit import rate_limit
+from receipt_api.review_service import ReviewService
+from receipt_api.schemas import (
+    DocumentDetail,
+    DocumentPage,
+    DocumentStatusResponse,
+    ExtractionResponse,
+    FileUrlResponse,
+    HistoryEntry,
+    status_response,
+    summary,
+)
 from receipt_shared.files import EXTENSION_MIME, SUPPORTED_MIME_TYPES, normalize_mime
 from receipt_shared.models.enums import DocumentStatus
-from receipt_shared.repository import DocumentRecord
+from receipt_shared.models.extraction import ExtractionResult
+from receipt_shared.repository import DocumentRecord, InvalidCursorError
 from receipt_shared.storage import upload_object_name
 
 logger = logging.getLogger("receipt.api.documents")
@@ -68,7 +83,7 @@ class UploadUrlResponse(BaseModel):
 )
 def create_upload_url(
     body: UploadUrlRequest,
-    user: CurrentUserDep,
+    user: Annotated[CurrentUser, Depends(rate_limit("upload"))],
     settings: SettingsDep,
     storage: StorageDep,
     repository: RepositoryDep,
@@ -122,4 +137,105 @@ def create_upload_url(
         headers=signed.headers,
         expires_at=signed.expires_at,
         status=record.status,
+    )
+
+
+ReadUser = Annotated[CurrentUser, Depends(rate_limit("read"))]
+
+
+def detail(record: DocumentRecord, service: ReviewService) -> DocumentDetail:
+    state = service.state(record)
+    effective = state.corrected or state.original
+    base = summary(record, effective).model_dump()
+    return DocumentDetail(
+        **base,
+        size_bytes=record.size_bytes,
+        page_count=record.page_count,
+        processing_attempts=record.processing_attempts,
+        model_version=record.model_version,
+        uploaded_at=record.uploaded_at,
+        processing_started_at=record.processing_started_at,
+        extracted_at=record.extracted_at,
+        processing_duration_ms=record.processing_duration_ms,
+        extraction=state.original,
+        corrected=state.corrected,
+        validation=state.validation,
+        history=[HistoryEntry.model_validate(h) for h in record.history],
+    )
+
+
+@router.get("", response_model=DocumentPage, summary="List your documents (newest first)")
+def list_documents(
+    user: ReadUser,
+    repository: RepositoryDep,
+    service: ReviewServiceDep,
+    status_filter: Annotated[
+        list[DocumentStatus] | None, Query(alias="status", description="Filter by status")
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    cursor: Annotated[str | None, Query(max_length=500)] = None,
+) -> DocumentPage:
+    try:
+        page = repository.list_for_user(
+            user.uid, statuses=status_filter, limit=limit, cursor=cursor
+        )
+    except InvalidCursorError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid page cursor.") from exc
+    return DocumentPage(
+        items=[summary(r, service.effective(r)) for r in page.items],
+        next_cursor=page.next_cursor,
+    )
+
+
+@router.get("/{document_id}", response_model=DocumentDetail, summary="Document details")
+def get_document(
+    document_id: str, user: ReadUser, repository: RepositoryDep, service: ReviewServiceDep
+) -> DocumentDetail:
+    return detail(owned_record(repository, document_id, user), service)
+
+
+@router.get(
+    "/{document_id}/status", response_model=DocumentStatusResponse, summary="Processing status"
+)
+def get_status(
+    document_id: str, user: ReadUser, repository: RepositoryDep
+) -> DocumentStatusResponse:
+    return status_response(owned_record(repository, document_id, user))
+
+
+@router.get(
+    "/{document_id}/extraction",
+    response_model=ExtractionResponse,
+    summary="Original Gemini extraction",
+    responses={404: {"description": "Not found or not extracted yet"}},
+)
+def get_extraction(
+    document_id: str, user: ReadUser, repository: RepositoryDep
+) -> ExtractionResponse:
+    record = owned_record(repository, document_id, user)
+    if record.extraction is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document has not been extracted yet.")
+    result = ExtractionResult.model_validate(record.extraction)
+    return ExtractionResponse(
+        document_id=record.document_id,
+        document=result.document,
+        metadata=result.metadata,
+        warnings=result.warnings,
+    )
+
+
+@router.get(
+    "/{document_id}/file",
+    response_model=FileUrlResponse,
+    summary="Short-lived URL to view the original file",
+)
+def get_file_url(
+    document_id: str, user: ReadUser, repository: RepositoryDep, storage: StorageDep
+) -> FileUrlResponse:
+    record = owned_record(repository, document_id, user)
+    if record.status is DocumentStatus.AWAITING_UPLOAD:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "The file has not been uploaded yet.")
+    signed = storage.download_url(record.object_name, filename=record.original_filename)
+    return FileUrlResponse(
+        url=signed.url, expires_at=signed.expires_at, content_type=record.content_type
     )

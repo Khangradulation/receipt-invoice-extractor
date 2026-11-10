@@ -46,6 +46,7 @@ class AnalyticsRows:
     metrics: dict[str, Any] | None = None
     transaction: dict[str, Any] | None = None
     line_items: list[dict[str, Any]] = field(default_factory=list)
+    review_records: list[dict[str, Any]] = field(default_factory=list)
 
 
 def build_rows(
@@ -60,6 +61,7 @@ def build_rows(
     approved_by: str | None = None,
     approved_at: datetime | None = None,
     review_required: bool | None = None,
+    review_records: list[dict[str, Any]] | None = None,
 ) -> AnalyticsRows:
     """Rows for ``record`` in its new ``status``.
 
@@ -184,4 +186,5 @@ def build_rows(
         metrics=metrics_row,
         transaction=transaction_row,
         line_items=line_rows,
+        review_records=[_clean(r) for r in (review_records or [])],
     )

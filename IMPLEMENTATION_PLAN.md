@@ -16,7 +16,7 @@ A phase is only marked done after its deliverable has been verified.
 | 4 | Cloud Storage integration | Done — verified live (see Phase log) |
 | 5 | Eventarc + Cloud Run processing | Done — verified live (see Phase log) |
 | 6 | BigQuery data warehouse | Done — verified live (see Phase log) |
-| 7 | FastAPI backend | Not started |
+| 7 | FastAPI backend | Done — verified live in-process; not yet deployed (see Phase log) |
 | 8 | React frontend | Not started |
 | 9 | Manual review workflow | Not started |
 | 10 | Extraction evaluation framework | Not started |
@@ -369,3 +369,52 @@ A phase is only marked done after its deliverable has been verified.
 - No currency conversion: totals are reported per currency.
 
 **Next:** Phase 7 — FastAPI backend.
+
+### Phase 7 — FastAPI backend (2026-11-10)
+
+**Implemented** (details: [docs/api.md](docs/api.md))
+- All endpoints from the spec, plus `GET /documents/{id}/file`: documents (list, detail, status,
+  extraction, file URL), review (queue, detail, PATCH corrections, approve, reject), analytics
+  (overview, monthly spending, categories, merchants), and health.
+- Authorization: `owned_record()` gives the same 404 for missing and foreign documents; the user
+  comes only from the Firebase token.
+- `ReviewService`:
+  - corrections are stored separately from the original AI output, with a per-field audit trail;
+  - every save revalidates (with optional duplicate acknowledgement);
+  - approval is refused while errors remain;
+  - approve/reject write BigQuery atomically (transaction plus `review_records`) before Firestore.
+- Cursor pagination (`list_for_user` for Firestore and in-memory), status filter, response
+  schemas, OpenAPI docs.
+- Per-user token-bucket rate limits (upload 30, review writes 60, analytics 60, reads 300 per
+  minute per instance) with `Retry-After`; 60 s analytics cache; date-range validation.
+- Error model additions: `rate_limited`, `conflict` (with `validation`), `invalid_correction`,
+  `service_unavailable`.
+- GCP: Firestore composite indexes (`ops/gcp/bootstrap-firestore-indexes.sh`); API access to
+  BigQuery raised from READER to WRITER on the dataset (approvals load data).
+
+**Verification (actual results)**
+- Unit tests: 379 backend tests passed, including 86 API tests: auth on every endpoint, cross-user
+  access → 404 for read and write, pagination, filters, corrections and audit, original
+  preserved, approval blocked/allowed, BigQuery failure → 503 with no state change, rejection,
+  analytics caching per user, rate limits.
+- **Live** (`make test-api-live`): 1/1 passed (110 s) with real Firestore, Cloud Storage,
+  BigQuery and the deployed worker:
+  - two uploads processed (VALID, REVIEW_REQUIRED);
+  - paging over the composite index; status filter;
+  - details, extraction and file download (bytes match);
+  - a second user gets 404 everywhere;
+  - approval blocked → corrected 28.86 → 25.86 → approved;
+  - BigQuery holds the transaction (25.86, REVIEWED) and the audit (CORRECTION 28.86 → 25.86,
+    APPROVE);
+  - analytics total CAD 52.54 and review rate 0.5.
+- All test data removed (verified 0 objects, records and BigQuery rows).
+
+**Not verified / known gaps**
+- **The API is not deployed to Cloud Run yet** (Phase 11/12). Live tests ran the API in-process
+  against real cloud services.
+- **Real Firebase sign-in is still untested.** Firebase Auth gets enabled with the login page in
+  Phase 8, where the user registers their own account.
+- Rate limits and the analytics cache are per instance; a shared limiter (e.g. Redis or API
+  Gateway) would be needed for strict global limits.
+
+**Next:** Phase 8 — React frontend.

@@ -20,6 +20,7 @@ from receipt_shared.analytics.schema import (
     EXTRACTED_TRANSACTIONS,
     EXTRACTION_METRICS,
     LINE_ITEMS,
+    REVIEW_RECORDS,
     qualified_dataset,
 )
 from receipt_shared.config import Settings
@@ -53,6 +54,9 @@ BEGIN
     DELETE FROM `{dataset}.{EXTRACTED_TRANSACTIONS.name}` WHERE document_id = @document_id;
     DELETE FROM `{dataset}.{LINE_ITEMS.name}` WHERE document_id = @document_id;
   END IF;
+  IF ARRAY_LENGTH(JSON_QUERY_ARRAY(@review_records)) > 0 THEN
+    {REVIEW_RECORDS.merge_from_json_array_sql(dataset, "review_records")}
+  END IF;
   COMMIT TRANSACTION;
 EXCEPTION WHEN ERROR THEN
   ROLLBACK TRANSACTION;
@@ -72,6 +76,7 @@ def build_parameters(rows: AnalyticsRows) -> list[tuple[str, str | None]]:
         ("metrics", _dumps(rows.metrics)),
         ("transaction", _dumps(rows.transaction)),
         ("line_items", _dumps(rows.line_items) or "[]"),
+        ("review_records", _dumps(rows.review_records) or "[]"),
     ]
 
 
