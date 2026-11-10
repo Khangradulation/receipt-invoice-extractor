@@ -228,3 +228,87 @@ def test_opening_review_rechecks_against_current_rules(env: Env) -> None:
     assert env.send("POST", f"/review/{doc_id}/approve").status_code == 200
     assert env.writer.rows[-1].transaction is not None
     assert env.writer.rows[-1].transaction["currency"] == "PKR"
+
+
+# --- concurrency & audit visibility ------------------------------------------------------------
+def test_stale_save_is_refused(env: Env) -> None:
+    from receipt_api.review_service import ReviewConflictError
+
+    doc_id = bad_total(env)
+    service = env.app.state.review_service
+    stale = env.repo.get(doc_id)
+    assert stale is not None
+    env.send("PATCH", f"/review/{doc_id}", {"fields": {"total_amount": "50.00"}})  # another tab
+    with pytest.raises(ReviewConflictError):
+        service.save_corrections(stale, reviewer_id="user_A", fields={"total_amount": "26.68"})
+    record = env.repo.get(doc_id)
+    assert record is not None
+    corrected = (record.model_extra or {})["review"]["corrected"]
+    assert corrected["total_amount"] == "50.00"  # the other tab's edit was not overwritten
+
+
+def test_approve_racing_reject_keeps_bigquery_consistent(env: Env) -> None:
+    from receipt_api.review_service import ReviewConflictError
+
+    doc_id = bad_total(env)
+    env.send("PATCH", f"/review/{doc_id}", {"fields": {"total_amount": "26.68"}})
+    service = env.app.state.review_service
+    stale = env.repo.get(doc_id)
+    assert stale is not None
+    # Rejected in another tab first...
+    assert (
+        env.send("POST", f"/review/{doc_id}/reject", {"reason": "Personal expense"}).status_code
+        == 200
+    )
+    # ...then the stale approve arrives: its BigQuery write happens, but it loses the race.
+    with pytest.raises(ReviewConflictError):
+        service.approve(stale, reviewer_id="user_A")
+    record = env.repo.get(doc_id)
+    assert record is not None
+    assert record.status is DocumentStatus.REJECTED
+    last = env.writer.rows[-1]  # resynced to the winner
+    assert last.document["processing_status"] == "REJECTED"
+    assert last.transaction is None
+    assert last.review_records[-1]["action"] == "REJECT"
+    assert last.review_records[-1]["reason"] == "Personal expense"
+
+
+def test_conflicts_return_409_with_reload_message(env: Env) -> None:
+    doc_id = bad_total(env)
+    env.send("PATCH", f"/review/{doc_id}", {"fields": {"total_amount": "26.68"}})
+    original_get = env.repo.get
+
+    def stale_get(document_id: str) -> object:
+        record = original_get(document_id)
+        env.repo.update(document_id, {"touched": True})  # someone writes right after our read
+        return record
+
+    env.repo.get = stale_get  # type: ignore[method-assign]
+    resp = env.send("POST", f"/review/{doc_id}/approve")
+    env.repo.get = original_get  # type: ignore[method-assign]
+    assert resp.status_code == 409
+    assert "Reload" in resp.json()["error"]["message"]
+    record = env.repo.get(doc_id)
+    assert record is not None
+    assert record.status is DocumentStatus.REVIEW_REQUIRED
+
+
+def test_document_detail_shows_decision_and_corrections(env: Env) -> None:
+    doc_id = bad_total(env)
+    env.send("PATCH", f"/review/{doc_id}", {"fields": {"total_amount": "26.68"}})
+    env.send("POST", f"/review/{doc_id}/approve")
+    review = env.get(f"/documents/{doc_id}").json()["review"]
+    assert review["decision"]["action"] == "APPROVED"
+    assert review["decision"]["by"] == "user_A"
+    assert [c["field_name"] for c in review["corrections"]] == ["total_amount"]
+
+    rejected = bad_total(env)
+    env.send("POST", f"/review/{rejected}/reject", {"reason": "Not a business expense"})
+    review = env.get(f"/documents/{rejected}").json()["review"]
+    assert review["decision"] == {
+        "action": "REJECTED",
+        "by": "user_A",
+        "at": review["decision"]["at"],
+        "reason": "Not a business expense",
+    }
+    assert env.get(f"/documents/{env.add()}").json()["review"] is None

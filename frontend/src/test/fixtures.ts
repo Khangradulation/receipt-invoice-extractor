@@ -98,6 +98,7 @@ export function detail(overrides: Partial<DocumentDetail> = {}): DocumentDetail 
       { status: 'UPLOADED', at: '2026-11-09T12:00:01Z', detail: null },
       { status: 'VALID', at: '2026-11-09T12:00:05Z', detail: null },
     ],
+    review: null,
     ...overrides,
   };
 }

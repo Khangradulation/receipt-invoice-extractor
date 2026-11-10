@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
+import { useAuth } from '@/auth/context';
+import { CorrectionHistory } from '@/components/documents/CorrectionHistory';
 import { ExtractedFields } from '@/components/documents/ExtractedFields';
 import { FileViewer } from '@/components/documents/FileViewer';
 import { HistoryTimeline } from '@/components/documents/HistoryTimeline';
@@ -13,6 +15,7 @@ import { NotFoundPage } from './NotFoundPage';
 
 export function DocumentDetailPage() {
   const { documentId = '' } = useParams();
+  const { user } = useAuth();
   const doc = useQuery({
     queryKey: ['document', documentId],
     queryFn: () => api.document(documentId),
@@ -68,6 +71,23 @@ export function DocumentDetailPage() {
           <Card title="Validation">
             <ValidationPanel validation={d.validation} />
           </Card>
+          {d.review && (
+            <Card title="Review & audit">
+              {d.review.decision && (
+                <p className="mb-3 text-sm">
+                  <span className="font-medium">
+                    {d.review.decision.action === 'APPROVED' ? 'Approved' : 'Rejected'}
+                  </span>{' '}
+                  {d.review.decision.by === user?.uid ? 'by you' : `by ${d.review.decision.by}`} on{' '}
+                  {formatDateTime(d.review.decision.at)}
+                  {d.review.decision.reason && (
+                    <span className="block text-slate-600">Reason: {d.review.decision.reason}</span>
+                  )}
+                </p>
+              )}
+              <CorrectionHistory corrections={d.review.corrections} />
+            </Card>
+          )}
           <Card title="Processing history">
             <HistoryTimeline history={d.history} />
             <dl className="mt-4 grid grid-cols-2 gap-2 text-xs text-slate-500">

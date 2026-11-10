@@ -173,6 +173,18 @@ class DocumentAlreadyExistsError(RuntimeError):
     pass
 
 
+class ConcurrentModificationError(RuntimeError):
+    """The document changed after it was read (another tab, request or the worker)."""
+
+
+def _same_instant(a: Any, b: datetime) -> bool:
+    if not isinstance(a, datetime):
+        return False
+    left: datetime = a if a.tzinfo else a.replace(tzinfo=UTC)
+    right = b if b.tzinfo else b.replace(tzinfo=UTC)
+    return left == right
+
+
 class DocumentRepository(Protocol):
     def create(self, record: DocumentRecord) -> None:
         """Insert a new record; raise ``DocumentAlreadyExistsError`` if the id is taken."""
@@ -207,6 +219,18 @@ class DocumentRepository(Protocol):
         self, *, user_id: str, file_sha256: str, merchant_key: str | None
     ) -> list[DocumentRecord]:
         """The user's documents with the same file hash or the same merchant key."""
+        ...
+
+    def update_if_unchanged(
+        self,
+        document_id: str,
+        expected_updated_at: datetime,
+        changes: dict[str, Any],
+        *,
+        history: Iterable[dict[str, Any]] = (),
+    ) -> None:
+        """Optimistic concurrency: apply ``changes`` only if nobody wrote since
+        ``expected_updated_at``; otherwise raise ``ConcurrentModificationError``."""
         ...
 
     def list_for_user(
@@ -309,6 +333,20 @@ class InMemoryDocumentRepository:
     ) -> None:
         with self._lock:
             _apply(self._items[document_id], changes, list(history), _now())
+
+    def update_if_unchanged(
+        self,
+        document_id: str,
+        expected_updated_at: datetime,
+        changes: dict[str, Any],
+        *,
+        history: Iterable[dict[str, Any]] = (),
+    ) -> None:
+        with self._lock:
+            data = self._items.get(document_id)
+            if data is None or not _same_instant(data.get("updated_at"), expected_updated_at):
+                raise ConcurrentModificationError(document_id)
+            _apply(data, changes, list(history), _now())
 
     def find_duplicate_candidates(
         self, *, user_id: str, file_sha256: str, merchant_key: str | None
@@ -446,6 +484,33 @@ class FirestoreDocumentRepository:
         if entries:
             payload["history"] = firestore.ArrayUnion(entries)
         self._collection.document(document_id).update(payload)
+
+    def update_if_unchanged(
+        self,
+        document_id: str,
+        expected_updated_at: datetime,
+        changes: dict[str, Any],
+        *,
+        history: Iterable[dict[str, Any]] = (),
+    ) -> None:
+        from google.cloud import firestore
+
+        ref = self._collection.document(document_id)
+        entries = list(history)
+
+        @firestore.transactional
+        def run(transaction: Any) -> None:
+            snapshot = ref.get(transaction=transaction)
+            data = snapshot.to_dict() if snapshot.exists else None
+            if data is None or not _same_instant(data.get("updated_at"), expected_updated_at):
+                raise ConcurrentModificationError(document_id)
+            payload = dict(changes)
+            payload["updated_at"] = _now()
+            if entries:
+                payload["history"] = firestore.ArrayUnion(entries)
+            transaction.update(ref, payload)
+
+        run(self._client.transaction())
 
     def find_duplicate_candidates(
         self, *, user_id: str, file_sha256: str, merchant_key: str | None

@@ -18,7 +18,7 @@ A phase is only marked done after its deliverable has been verified.
 | 6 | BigQuery data warehouse | Done — verified live (see Phase log) |
 | 7 | FastAPI backend | Done — verified live in-process; not yet deployed (see Phase log) |
 | 8 | React frontend | Done — verified end to end in the browser (see Phase log) |
-| 9 | Manual review workflow | Not started |
+| 9 | Manual review workflow | Done — verified live (see Phase log) |
 | 10 | Extraction evaluation framework | Not started |
 | 11 | Terraform infrastructure | Not started |
 | 12 | GitHub Actions CI/CD | Not started |
@@ -467,3 +467,36 @@ A phase is only marked done after its deliverable has been verified.
 - Email verification isn't required at sign-up.
 
 **Next:** Phase 9 — Manual review workflow (end-to-end verification through the UI).
+
+### Phase 9 — Manual review workflow (2026-11-10)
+
+Most of the workflow shipped in Phases 7–8 (review API, editor, audit trail, BigQuery export).
+This phase closed the remaining gaps and verified everything end to end. Details:
+[docs/review.md](docs/review.md).
+
+**Implemented**
+- Optimistic concurrency for review writes (`update_if_unchanged`, Firestore transaction on
+  `updated_at`). Stale saves, approvals and rejections return 409 "reload". When a decision loses a
+  race after writing BigQuery, BigQuery is resynced to the winning state (`ReviewService.rows_for`).
+- Document details now include `review`: the decision (approved/rejected, by, at, reason) and the
+  correction audit trail. A new *Review & audit* card on the document page shares the
+  `CorrectionHistory` component with the editor.
+- Editor: warns before closing with unsaved corrections; reloads automatically after a conflict.
+
+**Verification (actual results)**
+- Backend 385 tests (new: stale save refused without overwriting the other edit; approve racing
+  reject leaves REJECTED in Firestore and resyncs BigQuery to REJECT; 409 message; audit on the
+  document page; repository concurrency).
+- Frontend 39 tests (new: audit card for approved/rejected; conflict → message and refetch).
+- **Live** (`make test-api-live`): 2/2 passed against real services and the deployed worker:
+  - approve path: correction 28.86 → 25.86, APPROVE audit, analytics totals;
+  - reject path: same file → DUPLICATE → approve refused (409) → rejected with a reason → second
+    reject refused (409) → decision on the document page → BigQuery `documents` REJECTED, no
+    transaction, REJECT audit row with reason and reviewer.
+- Earlier in the browser (Phase 8): a real user approved a real PKR invoice end to end.
+
+**Known gaps**
+- Corrections reach BigQuery `review_records` when the document is decided; until then they live
+  only in Firestore (which is what the UI reads).
+
+**Next:** Phase 10 — Extraction evaluation framework.

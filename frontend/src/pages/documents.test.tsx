@@ -120,3 +120,61 @@ describe('document details', () => {
     expect(screen.getByText(/20 bytes were declared/)).toBeInTheDocument();
   });
 });
+
+describe('review audit on document details', () => {
+  it('shows who approved it, when, and the corrections made', async () => {
+    vi.spyOn(api, 'document').mockResolvedValue(
+      detail({
+        status: 'APPROVED',
+        review: {
+          decision: { action: 'APPROVED', by: 'user_A', at: '2026-11-10T00:47:51Z', reason: null },
+          corrections: [
+            {
+              review_id: 'doc1:c1',
+              field_name: 'total_amount',
+              original_value: '28.86',
+              previous_value: '28.86',
+              corrected_value: '25.86',
+              reviewer_id: 'user_A',
+              reviewed_at: '2026-11-10T00:46:00Z',
+            },
+          ],
+        },
+      }),
+    );
+    vi.spyOn(api, 'documentFile').mockResolvedValue({
+      url: 'u',
+      expires_at: '',
+      content_type: 'application/pdf',
+    });
+    renderApp('/documents/doc1');
+    expect(await screen.findByRole('heading', { name: 'Review & audit' })).toBeInTheDocument();
+    expect(screen.getByText(/by you on/)).toBeInTheDocument();
+    expect(screen.getByText('25.86')).toBeInTheDocument();
+    expect(screen.getByText(/AI value: 28.86 · you/)).toBeInTheDocument();
+  });
+
+  it('shows the rejection reason', async () => {
+    vi.spyOn(api, 'document').mockResolvedValue(
+      detail({
+        status: 'REJECTED',
+        review: {
+          decision: {
+            action: 'REJECTED',
+            by: 'user_A',
+            at: '2026-11-10T00:47:51Z',
+            reason: 'Personal expense',
+          },
+          corrections: [],
+        },
+      }),
+    );
+    vi.spyOn(api, 'documentFile').mockResolvedValue({
+      url: 'u',
+      expires_at: '',
+      content_type: 'application/pdf',
+    });
+    renderApp('/documents/doc1');
+    expect(await screen.findByText('Reason: Personal expense')).toBeInTheDocument();
+  });
+});

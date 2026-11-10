@@ -3,6 +3,7 @@
 from receipt_shared.repository.documents import (
     Claim,
     ClaimOutcome,
+    ConcurrentModificationError,
     DocumentAlreadyExistsError,
     DocumentRecord,
     DocumentRepository,
@@ -18,6 +19,7 @@ from receipt_shared.repository.documents import (
 __all__ = [
     "Claim",
     "ClaimOutcome",
+    "ConcurrentModificationError",
     "DocumentAlreadyExistsError",
     "DocumentRecord",
     "DocumentRepository",
