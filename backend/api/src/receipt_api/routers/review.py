@@ -75,7 +75,7 @@ def get_review(
     document_id: str, user: ReadUser, repository: RepositoryDep, service: ReviewServiceDep
 ) -> ReviewDetail:
     record = owned_record(repository, document_id, user)
-    return review_detail(service.state(record), service)
+    return review_detail(service.live_state(record), service)
 
 
 @router.patch(

@@ -1,44 +1,70 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, apiRequest } from './api';
+import { ApiError, apiRequest, setTokenProvider } from './api';
 
-function mockFetch(response: Response | Error) {
-  return vi
-    .spyOn(globalThis, 'fetch')
-    .mockImplementation(() =>
-      response instanceof Error ? Promise.reject(response) : Promise.resolve(response),
-    );
-}
+const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 
 describe('apiRequest', () => {
-  it('returns parsed JSON on success', async () => {
-    mockFetch(new Response(JSON.stringify({ ok: 1 }), { status: 200 }));
+  it('sends the Firebase ID token', async () => {
+    setTokenProvider(async () => 'tok-1');
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(ok({ ok: 1 }));
     await expect(apiRequest('/x')).resolves.toEqual({ ok: 1 });
+    expect(new Headers(spy.mock.calls[0]?.[1]?.headers).get('Authorization')).toBe('Bearer tok-1');
   });
 
-  it('sends bearer token and JSON body', async () => {
-    const spy = mockFetch(new Response('{}', { status: 200 }));
-    await apiRequest('/x', { method: 'POST', body: { a: 1 }, token: 't0k' });
-    const init = spy.mock.calls[0]?.[1];
-    const headers = new Headers(init?.headers);
-    expect(headers.get('Authorization')).toBe('Bearer t0k');
-    expect(headers.get('Content-Type')).toBe('application/json');
-    expect(init?.body).toBe('{"a":1}');
+  it('refreshes the token once after a 401 and retries', async () => {
+    const provider = vi.fn(async (force?: boolean) => (force ? 'fresh' : 'stale'));
+    setTokenProvider(provider);
+    const spy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response('{}', { status: 401 }))
+      .mockResolvedValueOnce(ok({ ok: 2 }));
+    await expect(apiRequest('/x')).resolves.toEqual({ ok: 2 });
+    expect(provider).toHaveBeenLastCalledWith(true);
+    expect(new Headers(spy.mock.calls[1]?.[1]?.headers).get('Authorization')).toBe('Bearer fresh');
   });
 
-  it('maps API error bodies to ApiError', async () => {
-    mockFetch(
+  it('skips auth for public endpoints', async () => {
+    setTokenProvider(async () => 'tok');
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(ok({}));
+    await apiRequest('/health', { auth: false });
+    expect(new Headers(spy.mock.calls[0]?.[1]?.headers).get('Authorization')).toBeNull();
+  });
+
+  it('builds query strings, repeating array params and dropping empty ones', async () => {
+    setTokenProvider(async () => null);
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(ok({}));
+    await apiRequest('/docs', { query: { status: ['VALID', 'FAILED'], limit: 5, cursor: null } });
+    expect(spy.mock.calls[0]?.[0]).toBe('/docs?status=VALID&status=FAILED&limit=5');
+  });
+
+  it('maps API errors, including validation details', async () => {
+    setTokenProvider(async () => null);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(
-        JSON.stringify({ error: { code: 'not_found', message: 'Nope', request_id: 'r1' } }),
-        { status: 404 },
+        JSON.stringify({
+          error: {
+            code: 'conflict',
+            message: 'Fix the remaining validation errors.',
+            request_id: 'r1',
+          },
+          validation: { is_valid: false },
+        }),
+        { status: 409 },
       ),
     );
     const err = await apiRequest('/x').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
-    expect(err).toMatchObject({ status: 404, code: 'not_found', message: 'Nope', requestId: 'r1' });
+    expect(err).toMatchObject({
+      status: 409,
+      code: 'conflict',
+      requestId: 'r1',
+      validation: { is_valid: false },
+    });
   });
 
-  it('maps network failures to a network_error', async () => {
-    mockFetch(new TypeError('Failed to fetch'));
+  it('maps network failures', async () => {
+    setTokenProvider(async () => null);
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
     await expect(apiRequest('/x')).rejects.toMatchObject({ code: 'network_error', status: 0 });
   });
 });

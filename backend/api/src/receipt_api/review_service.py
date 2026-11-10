@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -134,6 +134,18 @@ class ReviewService:
             corrections=list(review.get("corrections") or []),
             duplicate_acknowledged=bool(review.get("duplicate_acknowledged")),
         )
+
+    def live_state(self, record: DocumentRecord) -> ReviewState:
+        """Review state with validation re-run against the *current* rules and data.
+
+        Used when opening a document for review, so rule changes (e.g. a newly supported
+        currency) and newly arrived duplicates are reflected immediately. Nothing is persisted.
+        """
+        st = self.state(record)
+        document = st.corrected or st.original
+        if record.status not in REVIEWABLE or document is None:
+            return st
+        return replace(st, validation=self._validate(record, document, st.duplicate_acknowledged))
 
     def effective(self, record: DocumentRecord) -> ExtractedDocument | None:
         st = self.state(record)

@@ -42,6 +42,13 @@ The Vite dev server proxies `/api/*` to `VITE_API_PROXY_TARGET` (default `http:/
 so the browser uses a single origin in development. The **System status** page shows a live health
 check against the API.
 
+## 3b. Sign in
+
+The website uses Firebase Authentication. With `VITE_FIREBASE_*` set in `.env`, open
+<http://localhost:5173>, choose **Create account** and register. The API needs Application
+Default Credentials (`gcloud auth application-default login`) to reach Firestore, Cloud Storage
+and BigQuery, plus `SIGNING_SERVICE_ACCOUNT` to sign upload URLs. See [frontend.md](frontend.md).
+
 ## 4. Run the checks
 
 ```bash

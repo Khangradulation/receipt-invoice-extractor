@@ -201,3 +201,30 @@ def test_cannot_review_other_users_documents(
     assert record.status is DocumentStatus.REVIEW_REQUIRED
     assert "review" not in (record.model_extra or {})
     assert env.writer.rows == []
+
+
+def test_opening_review_rechecks_against_current_rules(env: Env) -> None:
+    """A document held for an unsupported currency becomes approvable once the rule changes."""
+    from receipt_api.review_service import ReviewService
+    from receipt_shared.validation import DocumentValidator, ValidationConfig
+
+    doc_id = env.add("user_A", DocumentStatus.REVIEW_REQUIRED, doc=document(currency="PKR"))
+    stored = env.repo.get(doc_id)
+    assert stored is not None
+    assert stored.validation is not None
+    assert stored.validation["validation_errors"][0]["code"] == "UNSUPPORTED_CURRENCY"
+    assert env.get(f"/review/{doc_id}").json()["can_approve"] is False
+
+    env.app.state.review_service = ReviewService(
+        repository=env.repo,
+        validator=DocumentValidator(
+            ValidationConfig(supported_currencies=frozenset({"CAD", "PKR"}))
+        ),
+        writer=env.writer,
+    )
+    body = env.get(f"/review/{doc_id}").json()
+    assert body["can_approve"] is True
+    assert body["validation"]["is_valid"] is True
+    assert env.send("POST", f"/review/{doc_id}/approve").status_code == 200
+    assert env.writer.rows[-1].transaction is not None
+    assert env.writer.rows[-1].transaction["currency"] == "PKR"
