@@ -14,6 +14,7 @@ TAG="${TAG:-$(git rev-parse --short HEAD)$(git diff --quiet HEAD -- backend || e
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/worker:${TAG}"
 GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.8-flash}"
 GEMINI_LOCATION="${GEMINI_LOCATION:-global}"
+SUPPORTED_CURRENCIES="${SUPPORTED_CURRENCIES:-USD,CAD,EUR,GBP,AUD,INR,JPY,CHF,MXN,NZD,SGD,PKR}"
 WORKER_SA="receipt-worker@${PROJECT_ID}.iam.gserviceaccount.com"
 EVENTARC_SA="receipt-eventarc@${PROJECT_ID}.iam.gserviceaccount.com"
 BUILD_SA="receipt-build@${PROJECT_ID}.iam.gserviceaccount.com"
@@ -35,7 +36,7 @@ gcloud run deploy "$SERVICE" --project "$PROJECT_ID" --region "$REGION" \
   --cpu 1 --memory 1Gi --concurrency 4 \
   --timeout 300 --min-instances 0 --max-instances 3 \
   --labels app=receipt-extractor,component=worker \
-  --set-env-vars "ENVIRONMENT=dev,LOG_LEVEL=INFO,GCP_PROJECT_ID=${PROJECT_ID},GCS_UPLOAD_BUCKET=${BUCKET},GEMINI_MODEL=${GEMINI_MODEL},GEMINI_LOCATION=${GEMINI_LOCATION}" \
+  --set-env-vars "^|^ENVIRONMENT=dev|LOG_LEVEL=INFO|GCP_PROJECT_ID=${PROJECT_ID}|GCS_UPLOAD_BUCKET=${BUCKET}|GEMINI_MODEL=${GEMINI_MODEL}|GEMINI_LOCATION=${GEMINI_LOCATION}|SUPPORTED_CURRENCIES=${SUPPORTED_CURRENCIES}" \
   --quiet
 
 gcloud run services add-iam-policy-binding "$SERVICE" --project "$PROJECT_ID" \

@@ -17,7 +17,7 @@ A phase is only marked done after its deliverable has been verified.
 | 5 | Eventarc + Cloud Run processing | Done — verified live (see Phase log) |
 | 6 | BigQuery data warehouse | Done — verified live (see Phase log) |
 | 7 | FastAPI backend | Done — verified live in-process; not yet deployed (see Phase log) |
-| 8 | React frontend | Not started |
+| 8 | React frontend | Done — verified end to end in the browser (see Phase log) |
 | 9 | Manual review workflow | Not started |
 | 10 | Extraction evaluation framework | Not started |
 | 11 | Terraform infrastructure | Not started |
@@ -418,3 +418,52 @@ A phase is only marked done after its deliverable has been verified.
   Gateway) would be needed for strict global limits.
 
 **Next:** Phase 8 — React frontend.
+
+### Phase 8 — React frontend (2026-11-10)
+
+**Implemented** (details: [docs/frontend.md](docs/frontend.md))
+- Firebase: added to the GCP project, web app created, Auth initialised (Identity Platform),
+  email/password enabled, `localhost` authorised. Config written to `.env` (public values).
+- Nine pages: login/registration, overview, upload, documents, document details, review queue,
+  review editor, analytics, settings. Sidebar layout, responsive drawer, loading/empty/error states.
+- Typed API client with ID token, refresh-and-retry on 401, and an error model including
+  `validation`. `AuthProvider` clears cached data on sign-out.
+- Upload: client checks, SHA-256, signed-URL PUT with progress, live status polling, deep links
+  to review.
+- Review editor: file side by side with fields; failed fields highlighted (`aria-invalid`); only
+  changed fields sent; approve gated on `can_approve` and no unsaved edits; reject reason modal;
+  duplicate acknowledgement; correction history.
+- Analytics: per-currency cards and charts (Recharts), date range.
+- Code-split heavy pages: initial JS 249 KB → 91 KB gzip; Firebase in its own chunk.
+- `@grpc/grpc-js` overridden to ^1.13.6 (high-severity advisory via firebase; not in the browser
+  bundle). `npm audit`: 0 vulnerabilities.
+
+**Verification (actual results)**
+- Frontend: 36 tests passed (upload flow, document listing, details, review workflow, dashboard
+  rendering, auth, API client). ESLint and Prettier clean, `tsc` clean, production build OK.
+- Tests caught and fixed: lower-case currency counted as an edit; ambiguous "Total" label between
+  the document total and line totals (accessibility).
+- `make check` exits 0 (backend 379, kill switch 7, frontend 36).
+- **Live, locally:** API (`uv run receipt-api`) and Vite against the real project. The user
+  registered their own account; requests with the real Firebase ID token returned 200 for
+  `/documents`, `/analytics/overview` and `/review`; a request without a token returned 401. This
+  is the first live verification of Firebase token checking.
+
+- **Real upload by the user:** an intentionally tricky PKR invoice uploaded through the UI was
+  processed automatically (14.7 s), classified as an invoice in PKR, and correctly held as
+  REVIEW_REQUIRED (`UNSUPPORTED_CURRENCY`). Follow-ups:
+  - PKR added to the default `SUPPORTED_CURRENCIES` (code, `.env`, deploy script, live worker
+    revision `receipt-worker-00003`);
+  - `GET /review/{id}` now re-runs validation with the current rules (`ReviewService.live_state`),
+    so the invoice became approvable without re-uploading (new test).
+- **The user approved it in the browser:** `POST /review/{id}/approve` → 200. Firestore went
+  REVIEW_REQUIRED → APPROVED; BigQuery has 1 transaction (PKR, invoice, `REVIEWED`), 6 line items
+  and the APPROVE audit record. That's the full upload → AI → validation → review → approval →
+  warehouse loop, verified through the real UI with real sign-in.
+
+**Not verified / known gaps**
+- The frontend isn't deployed yet (Phase 11/12). The production origin must be added to the
+  bucket CORS and to Firebase authorised domains.
+- Email verification isn't required at sign-up.
+
+**Next:** Phase 9 — Manual review workflow (end-to-end verification through the UI).

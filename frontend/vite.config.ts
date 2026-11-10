@@ -24,6 +24,17 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          // Firebase changes rarely; a separate chunk caches well across releases.
+          manualChunks: (id: string) =>
+            id.includes('node_modules/@firebase') || id.includes('node_modules/firebase')
+              ? 'firebase'
+              : undefined,
+        },
+      },
+    },
     test: {
       environment: 'jsdom',
       globals: true,

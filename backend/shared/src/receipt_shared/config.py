@@ -101,6 +101,7 @@ class Settings(BaseSettings):
             "MXN",
             "NZD",
             "SGD",
+            "PKR",
         ]
     )
 
