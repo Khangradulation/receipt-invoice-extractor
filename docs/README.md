@@ -11,3 +11,4 @@ Architecture, setup, deployment, security and evaluation docs. Each phase adds t
 - [analytics.md](analytics.md) — BigQuery schema, idempotent writes and analytics queries
 - [api.md](api.md) — REST API reference, pagination, errors, review semantics
 - [frontend.md](frontend.md) — pages, auth flow, configuration, tests
+- [review.md](review.md) — human-in-the-loop review workflow, audit trail, concurrency

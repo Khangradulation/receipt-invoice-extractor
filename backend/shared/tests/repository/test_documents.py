@@ -103,3 +103,20 @@ def test_firestore_repository_with_fake_client() -> None:
     assert repo.get("nope") is None
     with pytest.raises(DocumentAlreadyExistsError):
         repo.create(record())
+
+
+def test_update_if_unchanged_detects_concurrent_writes() -> None:
+    from receipt_shared.repository import ConcurrentModificationError
+
+    repo = InMemoryDocumentRepository()
+    repo.create(record())
+    current = repo.get("d1")
+    assert current is not None
+    repo.update_if_unchanged("d1", current.updated_at, {"x": 1})
+    with pytest.raises(ConcurrentModificationError):
+        repo.update_if_unchanged("d1", current.updated_at, {"x": 2})  # stale timestamp
+    with pytest.raises(ConcurrentModificationError):
+        repo.update_if_unchanged("missing", current.updated_at, {"x": 3})
+    latest = repo.get("d1")
+    assert latest is not None
+    assert (latest.model_extra or {})["x"] == 1

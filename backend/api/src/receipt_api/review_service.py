@@ -28,6 +28,7 @@ from receipt_shared.models.extraction import (
 )
 from receipt_shared.models.validation import ValidationResult
 from receipt_shared.repository import (
+    ConcurrentModificationError,
     DocumentRecord,
     DocumentRepository,
     RepositoryDuplicateIndex,
@@ -67,6 +68,16 @@ class InvalidCorrectionError(ReviewError):
 
 class ApprovalBlockedError(ReviewError):
     status_code = 409
+
+
+class ReviewConflictError(ReviewError):
+    status_code = 409
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This document was changed in another window or request. "
+            "Reload to see the latest version."
+        )
 
 
 @dataclass(frozen=True)
@@ -225,7 +236,12 @@ class ReviewService:
             "updated_at": now,
             "updated_by": reviewer_id,
         }
-        self._repo.update(record.document_id, {"review": review})
+        try:
+            self._repo.update_if_unchanged(
+                record.document_id, record.updated_at, {"review": review}
+            )
+        except ConcurrentModificationError as exc:
+            raise ReviewConflictError() from exc
         logger.info(
             "review corrections saved",
             extra={
@@ -294,8 +310,8 @@ class ReviewService:
         )
         self._writer.write(rows)  # BigQuery first; raises -> nothing changes in Firestore
         review = _review(record) | {"validation": validation.model_dump(mode="json")}
-        self._repo.update(
-            record.document_id,
+        self._commit(
+            record,
             {
                 "status": DocumentStatus.APPROVED,
                 "approved_by": reviewer_id,
@@ -303,7 +319,7 @@ class ReviewService:
                 "review": review,
                 "analytics_loaded_at": now,
             },
-            history=[history_entry(DocumentStatus.APPROVED, now, f"by {reviewer_id}")],
+            history_entry(DocumentStatus.APPROVED, now, f"by {reviewer_id}"),
         )
         logger.info("document approved", extra={"document_id": record.document_id})
         refreshed = self._repo.get(record.document_id)
@@ -334,8 +350,8 @@ class ReviewService:
             review_records=self._review_rows(st, decision),
         )
         self._writer.write(rows)
-        self._repo.update(
-            record.document_id,
+        self._commit(
+            record,
             {
                 "status": DocumentStatus.REJECTED,
                 "rejected_by": reviewer_id,
@@ -343,8 +359,73 @@ class ReviewService:
                 "rejection_reason": reason,
                 "analytics_loaded_at": now,
             },
-            history=[history_entry(DocumentStatus.REJECTED, now, f"by {reviewer_id}")],
+            history_entry(DocumentStatus.REJECTED, now, f"by {reviewer_id}"),
         )
         logger.info("document rejected", extra={"document_id": record.document_id})
         refreshed = self._repo.get(record.document_id)
         return self.state(refreshed or record)
+
+    # -- consistency -------------------------------------------------------------------------
+    def _commit(
+        self, record: DocumentRecord, changes: dict[str, Any], entry: dict[str, Any]
+    ) -> None:
+        """Conditionally write the decision; on a lost race, resync BigQuery to the winner."""
+        try:
+            self._repo.update_if_unchanged(
+                record.document_id, record.updated_at, changes, history=[entry]
+            )
+        except ConcurrentModificationError as exc:
+            current = self._repo.get(record.document_id)
+            if current is not None:
+                try:
+                    self._writer.write(self.rows_for(current))
+                except Exception:  # pragma: no cover - logged; the next decision rewrites it
+                    logger.exception(
+                        "analytics resync after review conflict failed",
+                        extra={"document_id": record.document_id},
+                    )
+            raise ReviewConflictError() from exc
+
+    def rows_for(self, record: DocumentRecord) -> AnalyticsRows:
+        """BigQuery rows matching the record's *stored* state (used to resync after conflicts)."""
+        extra = record.model_extra or {}
+        st = self.state(record)
+        extraction = (
+            ExtractionResult.model_validate(record.extraction) if record.extraction else None
+        )
+        decisions: list[dict[str, Any]] = []
+        approved_at = extra.get("approved_at")
+        if record.status is DocumentStatus.APPROVED:
+            decisions.append(
+                {
+                    "review_id": f"{record.document_id}:approve",
+                    "action": "APPROVE",
+                    "reviewer_id": extra.get("approved_by", record.user_id),
+                    "reviewed_at": approved_at,
+                }
+            )
+        if record.status is DocumentStatus.REJECTED:
+            decisions.append(
+                {
+                    "review_id": f"{record.document_id}:reject",
+                    "action": "REJECT",
+                    "reason": extra.get("rejection_reason"),
+                    "reviewer_id": extra.get("rejected_by", record.user_id),
+                    "reviewed_at": extra.get("rejected_at"),
+                }
+            )
+        review_rows = self._review_rows(st, decisions[0]) if decisions else []
+        return build_rows(
+            record,
+            status=record.status,
+            extraction=extraction,
+            validation=st.validation,
+            now=_now(),
+            effective_document=st.corrected or st.original,
+            record_source="REVIEWED" if st.corrected or decisions else "AI",
+            approved_by=extra.get("approved_by"),
+            approved_at=approved_at,
+            review_required=bool(record.validation)
+            and (record.validation or {}).get("validation_status") == "REVIEW_REQUIRED",
+            review_records=review_rows,
+        )

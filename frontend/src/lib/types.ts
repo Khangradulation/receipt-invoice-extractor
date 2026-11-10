@@ -98,6 +98,16 @@ export interface HistoryEntry {
   detail: string | null;
 }
 
+export interface ReviewSummary {
+  decision: {
+    action: 'APPROVED' | 'REJECTED';
+    by: string;
+    at: string;
+    reason: string | null;
+  } | null;
+  corrections: Correction[];
+}
+
 export interface DocumentDetail extends DocumentSummary {
   size_bytes: number;
   page_count: number | null;
@@ -111,6 +121,7 @@ export interface DocumentDetail extends DocumentSummary {
   corrected: ExtractedDocument | null;
   validation: ValidationResult | null;
   history: HistoryEntry[];
+  review: ReviewSummary | null;
 }
 
 export interface DocumentStatusResponse {

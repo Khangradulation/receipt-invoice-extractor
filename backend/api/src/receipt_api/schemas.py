@@ -63,6 +63,28 @@ class ExtractionResponse(BaseModel):
     warnings: list[str]
 
 
+class Correction(BaseModel):
+    review_id: str
+    field_name: str
+    original_value: str | None
+    previous_value: str | None
+    corrected_value: str | None
+    reviewer_id: str
+    reviewed_at: datetime
+
+
+class ReviewDecision(BaseModel):
+    action: str = Field(description="APPROVED or REJECTED")
+    by: str
+    at: datetime
+    reason: str | None = None
+
+
+class ReviewSummary(BaseModel):
+    decision: ReviewDecision | None = None
+    corrections: list[Correction] = Field(default_factory=list)
+
+
 class DocumentDetail(DocumentSummary):
     size_bytes: int
     page_count: int | None = None
@@ -78,22 +100,15 @@ class DocumentDetail(DocumentSummary):
     )
     validation: ValidationResult | None = None
     history: list[HistoryEntry] = Field(default_factory=list)
+    review: ReviewSummary | None = Field(
+        default=None, description="Review decision and correction audit trail, if reviewed"
+    )
 
 
 class FileUrlResponse(BaseModel):
     url: str
     expires_at: datetime
     content_type: str
-
-
-class Correction(BaseModel):
-    review_id: str
-    field_name: str
-    original_value: str | None
-    previous_value: str | None
-    corrected_value: str | None
-    reviewer_id: str
-    reviewed_at: datetime
 
 
 class ReviewDetail(BaseModel):

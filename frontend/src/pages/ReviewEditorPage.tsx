@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { CorrectionHistory } from '@/components/documents/CorrectionHistory';
 import { FileViewer } from '@/components/documents/FileViewer';
 import { ReviewForm } from '@/components/documents/ReviewForm';
 import { ValidationPanel } from '@/components/documents/ValidationPanel';
@@ -17,7 +18,7 @@ import {
 } from '@/components/ui';
 import { api, ApiError } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
-import { FIELD_LABELS, formatDateTime } from '@/lib/format';
+import { formatDateTime } from '@/lib/format';
 import { changedFields, toForm, type FormLineItem } from '@/lib/reviewForm';
 import type { ReviewDetail } from '@/lib/types';
 import { NotFoundPage } from './NotFoundPage';
@@ -78,6 +79,14 @@ function ReviewEditor({
   );
   const dirty = Object.keys(pending).length > 0 || ack !== r.duplicate_acknowledged;
 
+  // Warn before closing or reloading the tab with unsaved corrections.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+
   const onSuccess = (data: ReviewDetail, text: string) => {
     queryClient.setQueryData(['review', documentId], data);
     void queryClient.invalidateQueries({ queryKey: ['documents'] });
@@ -85,7 +94,13 @@ function ReviewEditor({
     void queryClient.invalidateQueries({ queryKey: ['document', documentId] });
     setMessage({ tone: 'success', text });
   };
-  const onError = (err: unknown) => setMessage({ tone: 'error', text: errorMessage(err) });
+  const onError = (err: unknown) => {
+    setMessage({ tone: 'error', text: errorMessage(err) });
+    if (err instanceof ApiError && err.status === 409 && !err.validation) {
+      // Changed elsewhere: load the latest version (the server message explains why).
+      void queryClient.invalidateQueries({ queryKey: ['review', documentId] });
+    }
+  };
 
   const save = useMutation({
     mutationFn: () => api.saveCorrections(documentId, pending, ack),
@@ -228,27 +243,7 @@ function ReviewEditor({
             </div>
           </Card>
           <Card title="Correction history">
-            {r.corrections.length === 0 ? (
-              <p className="text-sm text-slate-500">No corrections yet.</p>
-            ) : (
-              <ul className="space-y-2 text-sm">
-                {r.corrections.map((c) => (
-                  <li key={c.review_id}>
-                    <span className="font-medium">
-                      {FIELD_LABELS[c.field_name] ?? c.field_name}
-                    </span>
-                    :{' '}
-                    <span className="text-slate-500 line-through">
-                      {c.previous_value ?? 'empty'}
-                    </span>{' '}
-                    → <span>{c.corrected_value ?? 'empty'}</span>
-                    <span className="block text-xs text-slate-500">
-                      AI value: {c.original_value ?? 'empty'} · {formatDateTime(c.reviewed_at)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <CorrectionHistory corrections={r.corrections} />
           </Card>
         </div>
       </div>

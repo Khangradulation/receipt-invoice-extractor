@@ -18,12 +18,15 @@ from receipt_api.ownership import owned_record
 from receipt_api.ratelimit import rate_limit
 from receipt_api.review_service import ReviewService
 from receipt_api.schemas import (
+    Correction,
     DocumentDetail,
     DocumentPage,
     DocumentStatusResponse,
     ExtractionResponse,
     FileUrlResponse,
     HistoryEntry,
+    ReviewDecision,
+    ReviewSummary,
     status_response,
     summary,
 )
@@ -161,7 +164,30 @@ def detail(record: DocumentRecord, service: ReviewService) -> DocumentDetail:
         corrected=state.corrected,
         validation=state.validation,
         history=[HistoryEntry.model_validate(h) for h in record.history],
+        review=review_summary(record, state.corrections),
     )
+
+
+def review_summary(
+    record: DocumentRecord, corrections: list[dict[str, object]]
+) -> ReviewSummary | None:
+    extra = record.model_extra or {}
+    decision = None
+    if record.status is DocumentStatus.APPROVED and extra.get("approved_at"):
+        decision = ReviewDecision(
+            action="APPROVED", by=str(extra.get("approved_by")), at=extra["approved_at"]
+        )
+    elif record.status is DocumentStatus.REJECTED and extra.get("rejected_at"):
+        decision = ReviewDecision(
+            action="REJECTED",
+            by=str(extra.get("rejected_by")),
+            at=extra["rejected_at"],
+            reason=extra.get("rejection_reason"),
+        )
+    items = [Correction.model_validate(c) for c in corrections if c.get("action") == "CORRECTION"]
+    if decision is None and not items:
+        return None
+    return ReviewSummary(decision=decision, corrections=items)
 
 
 @router.get("", response_model=DocumentPage, summary="List your documents (newest first)")

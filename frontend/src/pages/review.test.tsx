@@ -125,3 +125,24 @@ describe('review editor', () => {
     await waitFor(() => expect(reject).toHaveBeenCalledWith('rev1', 'Personal expense'));
   });
 });
+
+describe('review conflicts', () => {
+  it('reloads the latest version when the document changed elsewhere', async () => {
+    mockFile();
+    const review = vi.spyOn(api, 'review').mockResolvedValue(reviewDetail());
+    vi.spyOn(api, 'saveCorrections').mockRejectedValue(
+      new ApiError(
+        409,
+        'conflict',
+        'This document was changed in another window or request. Reload to see the latest version.',
+      ),
+    );
+    renderApp('/review/rev1');
+    const total = await screen.findByLabelText('Total');
+    await userEvent.clear(total);
+    await userEvent.type(total, '25.86');
+    await userEvent.click(screen.getByRole('button', { name: 'Save corrections' }));
+    expect(await screen.findByText(/changed in another window/)).toBeInTheDocument();
+    await waitFor(() => expect(review).toHaveBeenCalledTimes(2)); // refetched
+  });
+});

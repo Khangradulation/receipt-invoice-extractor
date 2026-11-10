@@ -206,3 +206,48 @@ def test_full_api_flow(api: dict[str, Any]) -> None:
         "Maple Leaf Cafe",
         "Harbour Books & Coffee",
     }
+
+
+def test_reject_path(api: dict[str, Any]) -> None:
+    """Same file again -> DUPLICATE -> rejected with reason -> BigQuery audit, no transaction."""
+    if "approved" not in api:
+        pytest.skip("depends on test_full_api_flow")
+    dup = upload(api, "receipt_total_mismatch.pdf")
+    assert wait(api, dup)["status"] == "DUPLICATE"
+    assert (
+        call(api, "POST", f"/review/{dup}/approve").status_code == 409
+    )  # duplicates can't be approved
+    resp = call(api, "POST", f"/review/{dup}/reject", json={"reason": "Uploaded twice"})
+    assert resp.status_code == 200, resp.text
+    assert call(api, "POST", f"/review/{dup}/reject", json={"reason": "again"}).status_code == 409
+
+    review = call(api, "GET", f"/documents/{dup}").json()["review"]
+    assert review["decision"]["action"] == "REJECTED"
+    assert review["decision"]["reason"] == "Uploaded twice"
+    assert review["decision"]["by"] == api["users"]["A"]
+
+    from google.cloud import bigquery
+
+    from receipt_shared.analytics import qualified_dataset
+
+    s = api["settings"]
+    dataset = qualified_dataset(str(s.gcp_project_id), s.bigquery_dataset)
+    bq = bigquery.Client(project=s.gcp_project_id)
+    params = bigquery.QueryJobConfig(
+        query_parameters=[bigquery.ScalarQueryParameter("d", "STRING", dup)]
+    )
+
+    def rows(sql: str) -> list[Any]:
+        return list(bq.query(sql.format(ds=dataset), job_config=params).result())
+
+    doc = rows(
+        "SELECT processing_status, review_required FROM `{ds}.documents` WHERE document_id = @d"
+    )
+    assert [(r["processing_status"], r["review_required"]) for r in doc] == [("REJECTED", False)]
+    assert rows("SELECT 1 FROM `{ds}.extracted_transactions` WHERE document_id = @d") == []
+    audit = rows(
+        "SELECT action, reason, reviewer_id FROM `{ds}.review_records` WHERE document_id = @d"
+    )
+    assert [(r["action"], r["reason"], r["reviewer_id"]) for r in audit] == [
+        ("REJECT", "Uploaded twice", api["users"]["A"])
+    ]
