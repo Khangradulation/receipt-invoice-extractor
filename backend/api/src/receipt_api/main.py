@@ -13,7 +13,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from receipt_api.routers import documents, health
+from receipt_api.review_service import ReviewError
+from receipt_api.routers import analytics, documents, health, review
+from receipt_shared.analytics import AnalyticsWriteError
 from receipt_shared.config import Settings, get_settings
 from receipt_shared.http import ErrorBody, ErrorResponse, request_context_middleware
 from receipt_shared.logging import configure_logging
@@ -88,6 +90,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         return _error(request, 422, "validation_error", details)
 
+    @app.exception_handler(ReviewError)
+    async def _review_exc(request: Request, exc: ReviewError) -> JSONResponse:
+        codes = {409: "conflict", 422: "invalid_correction"}
+        response = _error(
+            request, exc.status_code, codes.get(exc.status_code, "bad_request"), exc.message
+        )
+        if exc.validation is not None:
+            import json as _json
+
+            body = _json.loads(bytes(response.body))
+            body["validation"] = exc.validation.model_dump(mode="json")
+            return JSONResponse(status_code=exc.status_code, content=body)
+        return response
+
+    @app.exception_handler(AnalyticsWriteError)
+    async def _analytics_exc(request: Request, exc: AnalyticsWriteError) -> JSONResponse:
+        logger.error("analytics write failed during review", extra={"retryable": exc.retryable})
+        return _error(
+            request, 503, "service_unavailable", "Could not save to analytics. Please try again."
+        )
+
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
         logger.exception(
@@ -98,6 +121,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.include_router(health.router, prefix=API_PREFIX)
     app.include_router(documents.router, prefix=API_PREFIX)
+    app.include_router(review.router, prefix=API_PREFIX)
+    app.include_router(analytics.router, prefix=API_PREFIX)
     logger.info("api started", extra={"environment": settings.environment.value})
     return app
 

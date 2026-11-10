@@ -30,8 +30,8 @@ for f in "${ROOT}"/sql/schema/*.sql; do
 done
 
 echo "==> IAM (dataset-scoped data access; job creation at project level)"
-# Dataset access entries: WRITER = bigquery.dataEditor, READER = bigquery.dataViewer, on this
-# dataset only. (Dataset IAM policy bindings via `bq add-iam-policy-binding` need allowlisting.)
+# Dataset access entries (WRITER = bigquery.dataEditor) on this dataset only. The API needs write
+# access because approving a reviewed document loads it into BigQuery. (Dataset IAM policy bindings via `bq add-iam-policy-binding` need allowlisting.)
 (cd "${ROOT}/backend" && uv run --quiet python - "$PROJECT_ID" "$DATASET" "$WORKER_SA" "$API_SA" <<'PY'
 import sys
 from google.cloud import bigquery
@@ -39,8 +39,13 @@ from google.cloud import bigquery
 project, dataset_id, worker, api = sys.argv[1:5]
 client = bigquery.Client(project=project)
 dataset = client.get_dataset(f"{project}.{dataset_id}")
-wanted = [("WRITER", worker), ("READER", api)]
-entries = list(dataset.access_entries)
+wanted = [("WRITER", worker), ("WRITER", api)]
+# Drop older/other roles for these accounts so each ends up with exactly the wanted role.
+managed = {email for _, email in wanted}
+entries = [
+    e for e in dataset.access_entries
+    if e.entity_id not in managed or (e.role, e.entity_id) in set(wanted)
+]
 existing = {(e.role, e.entity_id) for e in entries}
 for role, email in wanted:
     if (role, email) not in existing:
