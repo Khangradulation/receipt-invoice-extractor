@@ -7,11 +7,14 @@ developer's credentials, which need Token Creator on that service account.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import threading
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import quote
 
 import google.auth
 import google.cloud.storage as storage
@@ -23,6 +26,23 @@ from receipt_shared.config import Settings
 logger = logging.getLogger("receipt.storage")
 
 _SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
+
+
+def content_disposition(filename: str | None) -> str:
+    """``inline`` with a filename that can't break out of the header (RFC 6266 / 5987).
+
+    The ASCII fallback drops quotes, backslashes, control and non-ASCII characters; the UTF-8
+    ``filename*`` form is percent-encoded.
+    """
+    if not filename:
+        return "inline"
+    normalized = unicodedata.normalize("NFKC", filename)
+    ascii_name = (
+        "".join(c for c in normalized if 32 <= ord(c) < 127 and c not in '"\\').strip()
+        or "document"
+    )
+    encoded = quote(normalized, safe="")
+    return f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"
 
 
 class StorageNotConfiguredError(RuntimeError):
@@ -110,7 +130,7 @@ class DocumentStorage:
     def download_url(self, object_name: str, *, filename: str | None = None) -> SignedUrl:
         """A short-lived GET URL for viewing a stored document inline."""
         ttl = timedelta(seconds=self._settings.signed_url_ttl_seconds)
-        disposition = f'inline; filename="{filename}"' if filename else "inline"
+        disposition = content_disposition(filename)
         url = self._bucket.blob(object_name).generate_signed_url(
             version="v4",
             expiration=ttl,
@@ -143,3 +163,16 @@ class DocumentStorage:
 
     def exists(self, object_name: str) -> bool:
         return bool(self._bucket.blob(object_name).exists())
+
+    def delete_all_versions(self, object_name: str) -> int:
+        """Delete every generation of an object (live and noncurrent). Returns how many."""
+        from google.api_core.exceptions import NotFound
+
+        deleted = 0
+        for blob in self._client.list_blobs(self._bucket, prefix=object_name, versions=True):
+            if blob.name != object_name:
+                continue  # prefix match on a longer name
+            with contextlib.suppress(NotFound):  # already gone (a concurrent/repeated delete)
+                self._bucket.delete_blob(object_name, generation=blob.generation)
+            deleted += 1
+        return deleted

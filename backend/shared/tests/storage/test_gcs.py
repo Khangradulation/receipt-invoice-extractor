@@ -8,7 +8,7 @@ from pypdf import PdfWriter
 from receipt_shared.config import Settings
 from receipt_shared.extraction.errors import UnsupportedFileTypeError
 from receipt_shared.storage import DocumentStorage, StorageNotConfiguredError
-from receipt_shared.storage.gcs import ObjectTooLargeError, StoredObject
+from receipt_shared.storage.gcs import ObjectTooLargeError, StoredObject, content_disposition
 from receipt_shared.storage.verify import IntegrityError, verify_upload
 
 
@@ -124,7 +124,7 @@ def test_download_url_is_inline_get() -> None:
     signed = storage.download_url("uploads/u/d/a.pdf", filename="a.pdf")
     [call] = client.bucket_obj.blobs["uploads/u/d/a.pdf"].signed_calls
     assert call["method"] == "GET"
-    assert call["response_disposition"] == 'inline; filename="a.pdf"'
+    assert call["response_disposition"] == "inline; filename=\"a.pdf\"; filename*=UTF-8''a.pdf"
     assert signed.method == "GET"
 
 
@@ -209,3 +209,63 @@ def test_verify_upload_content_type_spoofing() -> None:
             _obj(fake_pdf), settings(max_upload_bytes=10_000),
             expected_content_type="application/pdf", expected_size=len(fake_pdf),
         )  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("filename", "expected_ascii"),
+    [
+        ('evil".pdf; filename="x.html', "evil.pdf; filename=x.html"),
+        ("line\r\nSet-Cookie: a=b.pdf", "lineSet-Cookie: a=b.pdf"),
+        ("reçu café.pdf", "reu caf.pdf"),
+        ('\\"', "document"),
+    ],
+)
+def test_content_disposition_cannot_break_out_of_the_header(
+    filename: str, expected_ascii: str
+) -> None:
+    value = content_disposition(filename)
+    assert value.startswith(f"inline; filename=\"{expected_ascii}\"; filename*=UTF-8''")
+    assert "\r" not in value
+    assert "\n" not in value
+    encoded = value.split("filename*=UTF-8''", 1)[1]
+    assert all(c.isalnum() or c in "%-._~" for c in encoded)
+
+
+def test_content_disposition_without_filename() -> None:
+    assert content_disposition(None) == "inline"
+
+
+class VersionedBucket(FakeBucket):
+    def __init__(self) -> None:
+        super().__init__()
+        self.deleted: list[tuple[str, int]] = []
+
+    def delete_blob(self, name: str, generation: int | None = None) -> None:
+        self.deleted.append((name, generation or 0))
+
+
+def test_delete_all_versions_deletes_every_generation_of_that_object_only() -> None:
+    storage, client, _ = make_storage()
+    bucket = VersionedBucket()
+    client.bucket_obj = bucket
+    storage._bucket = bucket  # type: ignore[assignment]
+    versions = []
+    for name, gen in [
+        ("uploads/u/d/a.pdf", 1),
+        ("uploads/u/d/a.pdf", 2),
+        ("uploads/u/d/a.pdf.bak", 3),
+    ]:
+        blob = FakeBlob(name)
+        blob.generation = gen
+        versions.append(blob)
+    calls: list[dict[str, Any]] = []
+
+    def list_blobs(bucket_arg: Any, prefix: str, versions: bool) -> list[FakeBlob]:
+        calls.append({"prefix": prefix, "versions": versions})
+        return [b for b in all_versions if b.name.startswith(prefix)]
+
+    all_versions = versions
+    client.list_blobs = list_blobs  # type: ignore[attr-defined]
+    assert storage.delete_all_versions("uploads/u/d/a.pdf") == 2
+    assert bucket.deleted == [("uploads/u/d/a.pdf", 1), ("uploads/u/d/a.pdf", 2)]
+    assert calls == [{"prefix": "uploads/u/d/a.pdf", "versions": True}]

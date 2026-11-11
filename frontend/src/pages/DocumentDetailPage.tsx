@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '@/auth/context';
 import { CorrectionHistory } from '@/components/documents/CorrectionHistory';
+import { DeleteDocumentButton } from '@/components/documents/DeleteDocumentButton';
 import { ExtractedFields } from '@/components/documents/ExtractedFields';
 import { FileViewer } from '@/components/documents/FileViewer';
 import { HistoryTimeline } from '@/components/documents/HistoryTimeline';
@@ -39,11 +40,14 @@ export function DocumentDetailPage() {
           </span>
         }
         actions={
-          d.status === 'REVIEW_REQUIRED' && (
-            <Link to={`/review/${d.document_id}`}>
-              <Button>Review</Button>
-            </Link>
-          )
+          <div className="flex items-center gap-2">
+            <DeleteDocumentButton documentId={d.document_id} filename={d.filename} />
+            {d.status === 'REVIEW_REQUIRED' && (
+              <Link to={`/review/${d.document_id}`}>
+                <Button>Review</Button>
+              </Link>
+            )}
+          </div>
         }
       />
       {d.error && (

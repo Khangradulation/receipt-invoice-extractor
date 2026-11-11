@@ -39,8 +39,8 @@ audit: ## Check Python and npm dependencies for known vulnerabilities
 		status=$$?; rm -f .audit-requirements.txt; exit $$status
 	cd $(FRONTEND) && npm audit --audit-level=high
 
-smoke-test: ## Smoke-test a deployed environment: make smoke-test PROJECT_ID=... [REGION=us-central1]
-	PROJECT_ID=$(PROJECT_ID) ./ops/ci/smoke-test.sh
+smoke-test: ## Smoke-test a deployed environment: make smoke-test PROJECT_ID=... PROJECT_NUMBER=...
+	PROJECT_ID=$(PROJECT_ID) PROJECT_NUMBER=$(PROJECT_NUMBER) ./ops/ci/smoke-test.sh
 
 test: ## Run backend and frontend unit tests
 	cd $(BACKEND) && uv run pytest

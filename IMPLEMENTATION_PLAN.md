@@ -21,8 +21,8 @@ A phase is only marked done after its deliverable has been verified.
 | 9 | Manual review workflow | Done — verified live (see Phase log) |
 | 10 | Extraction evaluation framework | Done — full run complete (see Phase log) |
 | 11 | Terraform infrastructure | Done — dev applied (see Phase log) |
-| 12 | GitHub Actions CI/CD | In review — first dev deploy runs on merge (see Phase log) |
-| 13 | Security | Not started |
+| 12 | GitHub Actions CI/CD | Done — dev deploys from main (see Phase log) |
+| 13 | Security | Done — see Phase log |
 | 14 | Monitoring and observability | Not started |
 | 15 | Testing (integration + E2E) | Not started |
 | 16 | Documentation | Not started |
@@ -638,8 +638,65 @@ deletion protection would have been switched off.
 - `receipt-api` and `receipt-frontend` placeholder services return 200 at their run.app URLs.
 - GitHub `dev` environment created (deployments from `main` only) with 8 variables.
 
-**Not verified yet**
-- CI on GitHub and the first `deploy-dev` run (happens on merge).
+- CI on PR 12: all 7 checks passed.
+- First `deploy-dev` run (43087345989, on merge): CI, the three image builds, deploy and smoke test
+  all succeeded. Smoke test: three services ready (`receipt-api-00002`, `receipt-worker-00005`,
+  `receipt-frontend-00002`), API health OK, 401 without a token, frontend security headers and
+  deep links OK, worker not reachable from the internet (404).
+- After the deploy: Terraform re-plan "No changes"; `make test-pipeline-live` 3/3 on the
+  CI-deployed worker.
+
+**Not verified / limitations**
+- Cloud Run also serves each service at a legacy `...-z5wqv4rxrq-uc.a.run.app` URL, which is not in
+  CORS or Firebase's authorised domains; use the `...-411540938720.us-central1.run.app` URLs. The
+  smoke test now tests those (Phase 13).
 - Prod: no prod project; `deploy-prod.yml` is linted and its Terraform validated only.
   Required reviewers on a private repository need a paid GitHub plan.
+
+### Phase 13 — Security (2026-11-11)
+
+Audited every Phase 13 requirement against the code. Already in place from earlier phases:
+private bucket (public access prevention enforced), Firebase token verification on every
+endpoint, per-user ownership checks with tests, least-privilege accounts, WIF, upload size/type
+limits plus byte-level verification, bound short-lived signed URLs, prompt-injection handling,
+dependency audits, synthetic-only data. Added in this phase:
+
+**Built**
+- **Deletion:** `DELETE /api/v1/documents/{id}` and a Delete button with confirmation. It removes
+  every stored version of the file, the document's rows in all five BigQuery tables (one
+  transaction) and the Firestore record, in that order so a failure can be retried. It's refused
+  (409) while an upload link is valid or a worker holds a live lease.
+- **Headers:**
+  - API: HSTS, `default-src 'none'` CSP (except the docs pages), `no-store`, `nosniff`, `DENY`.
+  - Frontend: CSP (the API origin is filled in at image build time), HSTS, COOP.
+- **Input hardening:**
+  - download filenames are sanitised in `Content-Disposition` (RFC 6266/5987); a crafted
+    filename could previously inject header parameters;
+  - client `X-Request-ID` and trace IDs are validated before they're logged.
+- **Terraform:**
+  - the API's bucket role is now `objectUser` (needed to delete), replacing creator + viewer;
+  - the WIF provider condition also pins the owner's numeric GitHub ID;
+  - `secret_env` gives Cloud Run Secret Manager support (the app has no secrets today).
+- **CI:**
+  - gitleaks scans the full git history (a checksum-verified release binary);
+  - Dependabot opens weekly update PRs (uv, npm, Docker, Terraform, Actions).
+- `docs/security.md`: controls, retention and deletion, assumptions, known limitations.
+- Phase 12 follow-ups: the log above was updated with the deploy results, and the smoke test now
+  checks the deterministic run.app URLs.
+
+**Verified**
+- Backend: 409 tests pass (new tests cover deletion, cross-user deletion, busy documents, retry
+  after a failed step, headers, request-ID and filename sanitisation). Frontend: 42 tests pass (new
+  tests cover delete with confirmation, cancel, and an explained 409).
+- CSP checked in a browser against the built app served with the production headers: the login
+  page loads with no console errors, the API origin is allowed, and other origins are blocked.
+- Dev `terraform apply` (approved), in two steps so the API never lacked bucket access: first the
+  new `objectUser` grant ("1 added"), then the rest ("1 changed, 2 destroyed": the WIF condition
+  and the old creator/viewer grants). Re-plan: "No changes".
+- Smoke test against dev passes with the deterministic URLs.
+
+**Not verified**
+- Signed-in pages under the new CSP (upload, file preview, charts): they need a real sign-in and
+  are to be checked on dev after deploy.
+- gitleaks: runs in CI only (running the downloaded binary locally was not permitted).
 

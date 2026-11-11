@@ -72,6 +72,9 @@ class _Doc:
     def get(self) -> _Snap:
         return _Snap(self.store.get(self.key))
 
+    def delete(self) -> None:
+        self.store.pop(self.key, None)
+
 
 class _Collection:
     def __init__(self) -> None:
@@ -120,3 +123,11 @@ def test_update_if_unchanged_detects_concurrent_writes() -> None:
     latest = repo.get("d1")
     assert latest is not None
     assert (latest.model_extra or {})["x"] == 1
+
+
+def test_delete_removes_the_record_and_is_idempotent() -> None:
+    for repo in (InMemoryDocumentRepository(), FirestoreDocumentRepository(_Client(), "documents")):
+        repo.create(record())
+        repo.delete("d1")
+        assert repo.get("d1") is None
+        repo.delete("d1")  # no error the second time

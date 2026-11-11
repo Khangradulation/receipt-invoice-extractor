@@ -48,3 +48,28 @@ def test_openapi_docs_served() -> None:
     resp = _client().get("/api/v1/openapi.json")
     assert resp.status_code == 200
     assert "/api/v1/health" in resp.json()["paths"]
+
+
+def test_security_headers_on_every_response() -> None:
+    client = _client()
+    for resp in (client.get("/api/v1/health"), client.get("/api/v1/does-not-exist")):
+        assert resp.headers["Strict-Transport-Security"].startswith("max-age=31536000")
+        assert resp.headers["X-Content-Type-Options"] == "nosniff"
+        assert resp.headers["X-Frame-Options"] == "DENY"
+        assert resp.headers["Cache-Control"] == "no-store"
+        assert (
+            resp.headers["Content-Security-Policy"] == "default-src 'none'; frame-ancestors 'none'"
+        )
+
+
+def test_docs_pages_are_not_blocked_by_csp() -> None:
+    resp = _client().get("/api/v1/docs")
+    assert resp.status_code == 200
+    assert "Content-Security-Policy" not in resp.headers
+
+
+def test_unsafe_request_ids_are_replaced() -> None:
+    for bad in ["a" * 200, "x\nInjected: 1", "<script>", "a b"]:
+        resp = _client().get("/api/v1/health", headers={"X-Request-ID": bad})
+        assert resp.headers["X-Request-ID"] != bad
+        assert len(resp.headers["X-Request-ID"]) == 32

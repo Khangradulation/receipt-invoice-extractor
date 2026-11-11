@@ -15,3 +15,4 @@ Architecture, setup, deployment, security and evaluation docs. Each phase adds t
 - [evaluation.md](evaluation.md) — extraction benchmark: dataset, scoring, results
 - [infrastructure.md](infrastructure.md) — Terraform: what it manages, safety, state
 - [deployment.md](deployment.md) — CI/CD workflows, keyless auth, smoke test, releases
+- [security.md](security.md) — security controls, retention and deletion, assumptions, limitations

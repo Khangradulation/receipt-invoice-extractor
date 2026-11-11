@@ -107,4 +107,4 @@ jobs:
               --image "${REGISTRY}/${svc}:${VERSION}" --quiet
           done
       - name: Smoke test
-        run: EXPECT_TAG="$VERSION" ./ops/ci/smoke-test.sh
+        run: EXPECT_TAG="$VERSION" PROJECT_NUMBER="${{ vars.GCP_PROJECT_NUMBER }}" ./ops/ci/smoke-test.sh

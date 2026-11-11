@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from importlib.metadata import version
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from receipt_api.review_service import ReviewError
@@ -23,6 +23,31 @@ from receipt_shared.logging import configure_logging
 logger = logging.getLogger("receipt.api")
 
 API_PREFIX = "/api/v1"
+_DOCS_PATHS = (f"{API_PREFIX}/docs", f"{API_PREFIX}/redoc", f"{API_PREFIX}/openapi.json")
+
+# Sent on every response. The API only serves JSON, so it can forbid everything a browser could
+# otherwise do with a response (render, frame, cache). The interactive docs load Swagger/ReDoc
+# from a CDN, so they get no CSP.
+SECURITY_HEADERS = {
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-store",
+    "Cross-Origin-Resource-Policy": "same-site",
+}
+API_CSP = "default-src 'none'; frame-ancestors 'none'"
+
+
+async def security_headers_middleware(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    response = await call_next(request)
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    if not request.url.path.startswith(_DOCS_PATHS):
+        response.headers.setdefault("Content-Security-Policy", API_CSP)
+    return response
 
 
 _ERROR_CODES = {
@@ -76,6 +101,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         expose_headers=["X-Request-ID"],
     )
     app.middleware("http")(request_context_middleware)
+    app.middleware("http")(security_headers_middleware)
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_exc(request: Request, exc: StarletteHTTPException) -> JSONResponse:

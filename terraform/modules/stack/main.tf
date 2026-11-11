@@ -61,8 +61,8 @@ module "documents" {
   cors_origins = local.web_origins
   labels       = merge(local.labels, { component = "documents" })
   iam_members = [
-    { role = "roles/storage.objectCreator", member = local.sa["receipt-api"] },
-    { role = "roles/storage.objectViewer", member = local.sa["receipt-api"] },
+    # Create (uploads), read (previews) and delete (user deletion, every version) on this bucket.
+    { role = "roles/storage.objectUser", member = local.sa["receipt-api"] },
     { role = "roles/storage.objectViewer", member = local.sa["receipt-worker"] },
   ]
 }
@@ -212,6 +212,7 @@ module "github_wif" {
   source             = "../github_wif"
   project_id         = var.project_id
   github_repository  = var.github_repository
+  github_owner_id    = var.github_owner_id
   github_environment = var.github_environment
   deployer_roles     = ["roles/run.developer"]
   act_as_service_accounts = [

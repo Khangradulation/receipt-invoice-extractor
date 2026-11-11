@@ -152,6 +152,8 @@ export const api = {
     apiRequest<DocumentStatusResponse>(`/api/v1/documents/${encodeURIComponent(id)}/status`),
   documentFile: (id: string) =>
     apiRequest<FileUrlResponse>(`/api/v1/documents/${encodeURIComponent(id)}/file`),
+  deleteDocument: (id: string) =>
+    apiRequest<null>(`/api/v1/documents/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   reviewQueue: (params: { limit?: number; cursor?: string | null } = {}) =>
     apiRequest<DocumentPage>('/api/v1/review', { query: params }),

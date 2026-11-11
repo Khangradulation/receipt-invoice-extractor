@@ -244,6 +244,10 @@ class DocumentRepository(Protocol):
         """The user's documents, newest first, ``limit`` per page."""
         ...
 
+    def delete(self, document_id: str) -> None:
+        """Remove the record entirely (user deletion). Deleting a missing record is a no-op."""
+        ...
+
 
 @dataclass(frozen=True)
 class Page:
@@ -374,6 +378,10 @@ class InMemoryDocumentRepository:
         with self._lock:
             items = [copy.deepcopy(d) for d in self._items.values()]
         return _in_memory_list(items, user_id, statuses, limit, cursor)
+
+    def delete(self, document_id: str) -> None:
+        with self._lock:
+            self._items.pop(document_id, None)
 
 
 def _in_memory_list(
@@ -559,6 +567,9 @@ class FirestoreDocumentRepository:
         records = [DocumentRecord.from_firestore(s.to_dict()) for s in snapshots[:limit]]
         has_more = len(snapshots) > limit
         return Page(records, encode_cursor(records[-1]) if has_more and records else None)
+
+    def delete(self, document_id: str) -> None:
+        self._collection.document(document_id).delete()
 
 
 # --- duplicate index adapter -------------------------------------------------------------------

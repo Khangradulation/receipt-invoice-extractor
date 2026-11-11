@@ -12,6 +12,7 @@ from receipt_shared.analytics import (
     AnalyticsRows,
     AnalyticsWriteError,
     BigQueryAnalyticsWriter,
+    build_delete_script,
     build_parameters,
     build_write_script,
     load_query,
@@ -109,6 +110,34 @@ def test_write_errors_are_classified(error: Exception, retryable: bool) -> None:
     with pytest.raises(AnalyticsWriteError) as info:
         BigQueryAnalyticsWriter(SETTINGS, client=client).write(ROWS)
     assert info.value.retryable is retryable
+
+
+def test_delete_script_clears_every_table_in_one_transaction() -> None:
+    sql = build_delete_script("proj-1.receipt_analytics")
+    assert sql.count("BEGIN TRANSACTION") == 1
+    assert "ROLLBACK TRANSACTION" in sql
+    for table in ("documents", "extracted_transactions", "line_items", "review_records",
+                  "extraction_metrics"):  # fmt: skip
+        assert (
+            f"DELETE FROM `proj-1.receipt_analytics.{table}` WHERE document_id = @document_id"  # noqa: S608
+            in sql
+        )
+
+
+def test_writer_delete_is_parameterised() -> None:
+    client = FakeClient()
+    BigQueryAnalyticsWriter(SETTINGS, client=client).delete("d1")
+    [call] = client.calls
+    assert "DELETE FROM" in call["sql"]
+    assert [(p.name, p.value) for p in call["config"].query_parameters] == [("document_id", "d1")]
+    assert call["config"].labels["operation"] == "document-delete"
+
+
+def test_delete_errors_are_classified() -> None:
+    client = FakeClient(FakeJob(error=gexc.ServiceUnavailable("backend")))
+    with pytest.raises(AnalyticsWriteError) as info:
+        BigQueryAnalyticsWriter(SETTINGS, client=client).delete("d1")
+    assert info.value.retryable is True
 
 
 def test_writer_requires_project() -> None:

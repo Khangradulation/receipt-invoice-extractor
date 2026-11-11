@@ -14,6 +14,11 @@ variable "deployer_account_id" {
   type    = string
   default = "receipt-ci-deployer"
 }
+variable "github_owner_id" {
+  description = "Numeric GitHub ID of the repository owner (null = check the name only)"
+  type        = string
+  default     = null
+}
 variable "github_environment" {
   description = "GitHub Actions environment (e.g. dev, production) allowed to impersonate the accounts"
   type        = string
@@ -54,8 +59,12 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "attribute.workflow"    = "assertion.workflow"
     "attribute.environment" = "assertion.environment"
   }
-  # Reject tokens from any other repository before they reach IAM.
-  attribute_condition = "assertion.repository == \"${var.github_repository}\""
+  # Reject tokens from any other repository before they reach IAM. The owner's numeric ID also
+  # guards against the account or repository name being deleted and re-registered by someone else.
+  attribute_condition = join(" && ", compact([
+    "assertion.repository == \"${var.github_repository}\"",
+    var.github_owner_id == null ? "" : "assertion.repository_owner_id == \"${var.github_owner_id}\"",
+  ]))
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
   }
