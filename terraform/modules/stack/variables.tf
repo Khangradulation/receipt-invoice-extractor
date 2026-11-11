@@ -33,28 +33,28 @@ variable "developer_members" {
   default     = []
 }
 variable "web_origins" {
-  description = "Browser origins of the web app (bucket CORS and the API's CORS)"
+  description = "Extra browser origins (bucket and API CORS); the frontend's run.app URL is always allowed"
   type        = list(string)
   default     = ["http://localhost:5173"]
 }
 variable "auth_domains" {
-  description = "Domains allowed to use Firebase sign-in"
+  description = "Extra Firebase sign-in domains; the frontend's run.app host is always allowed"
   type        = list(string)
   default     = ["localhost"]
 }
-variable "worker_image" {
-  description = "Image used if the worker service has to be created; later images come from CI"
+variable "initial_image" {
+  description = "Placeholder image for newly created Cloud Run services; CI deploys the real images"
+  type        = string
+  default     = "us-docker.pkg.dev/cloudrun/container/hello"
+}
+variable "github_environment" {
+  description = "GitHub Actions environment whose jobs may deploy (e.g. dev, production)"
   type        = string
 }
-variable "api_image" {
-  description = "API image; the API service is created only once an image exists (Phase 12 CI)"
-  type        = string
-  default     = null
-}
-variable "frontend_image" {
-  description = "Frontend image; created only once an image exists (Phase 12 CI)"
-  type        = string
-  default     = null
+variable "terraform_runner_roles" {
+  description = "Project roles for a CI Terraform account (prod only; empty = no account)"
+  type        = list(string)
+  default     = []
 }
 variable "gemini_model" {
   type    = string

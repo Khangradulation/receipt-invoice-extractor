@@ -21,7 +21,7 @@ A phase is only marked done after its deliverable has been verified.
 | 9 | Manual review workflow | Done — verified live (see Phase log) |
 | 10 | Extraction evaluation framework | Done — full run complete (see Phase log) |
 | 11 | Terraform infrastructure | Done — dev applied (see Phase log) |
-| 12 | GitHub Actions CI/CD | Not started |
+| 12 | GitHub Actions CI/CD | In review — first dev deploy runs on merge (see Phase log) |
 | 13 | Security | Not started |
 | 14 | Monitoring and observability | Not started |
 | 15 | Testing (integration + E2E) | Not started |
@@ -613,3 +613,33 @@ deletion protection would have been switched off.
 - The kill-switch function's code is still deployed by its README command, not Terraform.
 
 **Next:** Phase 12 (GitHub Actions CI/CD).
+
+### Phase 12 — GitHub Actions CI/CD (2026-11-11)
+
+**Built**
+- `ci.yml`: backend and frontend checks, `pip-audit` + `npm audit`, `terraform fmt`/`validate`,
+  Docker builds of the three images. No cloud credentials.
+- `deploy-dev.yml` (push to `main`): CI → commit-tagged images pushed with Workload Identity
+  Federation → `gcloud run deploy` → smoke test.
+- `deploy-prod.yml` (`vX.Y.Z` tags): CI → protected `production` job: Terraform plan/apply,
+  versioned images, deploy, smoke test.
+- `ops/ci/smoke-test.sh` / `make smoke-test` (read-only), `make audit`.
+- Terraform: API and frontend services always created with Google's placeholder image (CI deploys
+  the real ones, removing the image chicken-and-egg); the frontend's predictable run.app URL is
+  added to CORS and Firebase authorised domains; WIF restricted to one GitHub environment; optional
+  prod `receipt-ci-terraform` account.
+- Actions pinned to commit SHAs (looked up from each action's latest release).
+
+**Verified**
+- Locally: `make check` passed; `actionlint` clean; `make audit`: no known vulnerabilities in 65
+  Python packages or npm.
+- Dev `terraform apply` (approved): "5 added, 3 changed, 1 destroyed" (the destroyed resource is the
+  old repository-wide WIF binding, replaced by the `dev`-environment one); re-plan "No changes".
+- `receipt-api` and `receipt-frontend` placeholder services return 200 at their run.app URLs.
+- GitHub `dev` environment created (deployments from `main` only) with 8 variables.
+
+**Not verified yet**
+- CI on GitHub and the first `deploy-dev` run (happens on merge).
+- Prod: no prod project; `deploy-prod.yml` is linted and its Terraform validated only.
+  Required reviewers on a private repository need a paid GitHub plan.
+
