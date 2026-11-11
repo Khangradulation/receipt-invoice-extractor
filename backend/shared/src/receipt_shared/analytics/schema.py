@@ -12,9 +12,11 @@ exactly — never through a float.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 
@@ -273,14 +275,58 @@ def render_ddl_files() -> dict[str, str]:
     return {f"{t.name}.sql": header + t.ddl(DDL_PLACEHOLDER) for t in TABLES}
 
 
+_PARTITION_RE = re.compile(r"^(DATE|DATE_TRUNC)\((\w+)(?:,\s*(DAY|MONTH))?\)$")
+
+
+def terraform_tables() -> dict[str, Any]:
+    """Table definitions for the Terraform bigquery module (schema, partitioning, clustering)."""
+    out: dict[str, Any] = {}
+    for t in TABLES:
+        m = _PARTITION_RE.match(t.partition_by)
+        if not m:
+            raise ValueError(f"unsupported partition expression: {t.partition_by}")
+        func, column, unit = m.groups()
+        fields = []
+        for c in t.columns:
+            repeated = c.type.startswith("ARRAY<")
+            fields.append(
+                {
+                    "name": c.name,
+                    "type": c.type[6:-1] if repeated else c.type,
+                    "mode": "REPEATED" if repeated else ("REQUIRED" if c.required else "NULLABLE"),
+                    "description": c.description,
+                }
+            )
+        out[t.name] = {
+            "description": t.description,
+            "partition": {
+                "field": column,
+                "type": "MONTH" if func == "DATE_TRUNC" else (unit or "DAY"),
+            },
+            "clustering": list(t.cluster_by),
+            "schema": fields,
+        }
+    return out
+
+
+def render_terraform_tables() -> str:
+    return json.dumps(terraform_tables(), indent=2) + "\n"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Write sql/schema/*.sql from the table specs")
     parser.add_argument("out_dir", type=Path)
+    parser.add_argument(
+        "--terraform", type=Path, help="Also write the Terraform bigquery module's tables.json"
+    )
     args = parser.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
     for name, text in render_ddl_files().items():
         (args.out_dir / name).write_text(text)
     print(f"wrote {len(TABLES)} files to {args.out_dir}")
+    if args.terraform:
+        args.terraform.write_text(render_terraform_tables())
+        print(f"wrote {args.terraform}")
 
 
 if __name__ == "__main__":

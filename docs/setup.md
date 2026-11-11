@@ -87,7 +87,7 @@ backend/            uv workspace (Python 3.12)
   worker/           receipt_worker: Eventarc-triggered processing service (Cloud Run)
 frontend/           React + TypeScript + Vite + Tailwind CSS
 evaluation/         Extraction benchmark (Phase 10)
-terraform/          Infrastructure as code (Phase 11)
+terraform/          Infrastructure as code (see infrastructure.md)
 sql/                BigQuery DDL and analytics queries (Phase 6)
 docs/               Project documentation
 .github/workflows/  CI/CD (Phase 12)

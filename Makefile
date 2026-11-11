@@ -3,7 +3,7 @@
 BACKEND := backend
 FRONTEND := frontend
 
-.PHONY: help install api worker web check test lint format backend-check frontend-check docker-build samples extract test-gemini-live test-storage-live test-pipeline-live test-bigquery-live test-api-live sql-schema dataset evaluate
+.PHONY: help install api worker web check test lint format backend-check frontend-check docker-build samples extract test-gemini-live test-storage-live test-pipeline-live test-bigquery-live test-api-live sql-schema dataset evaluate tf-fmt tf-validate tf-plan-dev
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -30,7 +30,7 @@ backend-check: ## Lint, format-check, type-check and test the backend
 frontend-check: ## Lint, format-check, type-check, test and build the frontend
 	cd $(FRONTEND) && npm run lint && npm run format:check && npm run typecheck && npm test && npm run build
 
-check: backend-check frontend-check ## Run every check (what CI runs)
+check: backend-check frontend-check tf-fmt tf-validate ## Run every check (what CI runs)
 
 test: ## Run backend and frontend unit tests
 	cd $(BACKEND) && uv run pytest
@@ -63,12 +63,28 @@ dataset: ## Generate the labelled synthetic benchmark (150 docs) in evaluation/d
 evaluate: ## Run the extraction benchmark (billable Gemini calls; ARGS="--limit 5")
 	cd $(BACKEND) && uv run python ../evaluation/run_benchmark.py $(ARGS)
 
-sql-schema: ## Regenerate sql/schema/*.sql from the Python table specs
-	cd $(BACKEND) && uv run python -m receipt_shared.analytics.schema ../sql/schema
+sql-schema: ## Regenerate sql/schema/*.sql and the Terraform BigQuery tables from the Python specs
+	cd $(BACKEND) && uv run python -m receipt_shared.analytics.schema ../sql/schema \
+		--terraform ../terraform/modules/bigquery/tables.json
 
 format: ## Auto-format backend and frontend
 	cd $(BACKEND) && uv run ruff format . ../evaluation ../ops && uv run ruff check --fix . ../evaluation ../ops
 	cd $(FRONTEND) && npm run format
+
+TF_DIRS := terraform/environments/dev terraform/environments/prod
+TF_DEV := terraform/environments/dev
+
+tf-fmt: ## Check Terraform formatting
+	terraform fmt -recursive -check terraform
+
+tf-validate: ## Validate both Terraform environments (no cloud access needed)
+	for d in $(TF_DIRS); do \
+		terraform -chdir=$$d init -backend=false -input=false >/dev/null && terraform -chdir=$$d validate || exit 1; \
+	done
+
+tf-plan-dev: ## Read-only Terraform plan for dev (needs ADC and terraform.tfvars; TF_STATE_BUCKET=...)
+	terraform -chdir=$(TF_DEV) init -input=false -backend-config="bucket=$(TF_STATE_BUCKET)" >/dev/null
+	terraform -chdir=$(TF_DEV) plan -input=false
 
 docker-build: ## Build all three production images (requires Docker BuildKit/buildx)
 	docker build -f $(BACKEND)/api/Dockerfile -t receipt-api:local $(BACKEND)

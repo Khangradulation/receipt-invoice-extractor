@@ -2,7 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from receipt_shared.analytics.schema import TABLES, qualified_dataset, render_ddl_files
+from receipt_shared.analytics.schema import (
+    TABLES,
+    qualified_dataset,
+    render_ddl_files,
+    render_terraform_tables,
+    terraform_tables,
+)
 
 SQL_DIR = Path(__file__).resolve().parents[4] / "sql" / "schema"
 
@@ -70,3 +76,24 @@ def test_qualified_dataset_ok() -> None:
     assert qualified_dataset("receipt-extractor-lkmljr", "receipt_analytics") == (
         "receipt-extractor-lkmljr.receipt_analytics"
     )
+
+
+def test_terraform_tables_match_specs() -> None:
+    """terraform/modules/bigquery/tables.json is generated; regenerate with `make sql-schema`."""
+    path = SQL_DIR.parents[1] / "terraform" / "modules" / "bigquery" / "tables.json"
+    assert path.read_text() == render_terraform_tables()
+
+
+def test_terraform_partitioning_and_modes() -> None:
+    tables = terraform_tables()
+    assert tables["documents"]["partition"] == {"field": "created_at", "type": "DAY"}
+    assert tables["extracted_transactions"]["partition"] == {
+        "field": "document_date",
+        "type": "MONTH",
+    }
+    failed = next(f for f in tables["documents"]["schema"] if f["name"] == "failed_fields")
+    assert (failed["type"], failed["mode"]) == ("STRING", "REPEATED")
+    total = next(
+        f for f in tables["extracted_transactions"]["schema"] if f["name"] == "total_amount"
+    )
+    assert (total["type"], total["mode"]) == ("NUMERIC", "REQUIRED")
