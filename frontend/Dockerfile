@@ -24,7 +24,7 @@ RUN api_origin="$(printf '%s' "$VITE_API_BASE_URL" | sed -E 's#^(https?://[^/]+)
     case "$api_origin" in ""|http://*|https://*) ;; *) echo "bad VITE_API_BASE_URL" >&2; exit 1 ;; esac && \
     sed "s#__API_ORIGIN__#${api_origin}#" security-headers.conf > /tmp/security-headers.conf
 
-FROM nginxinc/nginx-unprivileged:1.29-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runtime
 COPY --from=build /tmp/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
