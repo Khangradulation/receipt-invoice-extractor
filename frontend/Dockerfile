@@ -3,7 +3,7 @@
 # VITE_* values are compiled into the bundle at build time and are public by nature —
 # never pass secrets here.
 
-FROM node:24-alpine AS build
+FROM node:25-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
