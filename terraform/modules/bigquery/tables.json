@@ -1,0 +1,594 @@
+{
+  "documents": {
+    "description": "One row per processed document (all outcomes), for operational analytics.",
+    "partition": {
+      "field": "created_at",
+      "type": "DAY"
+    },
+    "clustering": [
+      "user_id",
+      "processing_status"
+    ],
+    "schema": [
+      {
+        "name": "document_id",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "user_id",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "document_type",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "processing_status",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": "Current status (VALID, REVIEW_REQUIRED, ...)"
+      },
+      {
+        "name": "validation_status",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "Latest validation outcome"
+      },
+      {
+        "name": "review_required",
+        "type": "BOOL",
+        "mode": "NULLABLE",
+        "description": "Initial validation sent it to review"
+      },
+      {
+        "name": "duplicate_status",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "error_count",
+        "type": "INT64",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "warning_count",
+        "type": "INT64",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "failed_fields",
+        "type": "STRING",
+        "mode": "REPEATED",
+        "description": ""
+      },
+      {
+        "name": "error_code",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "Processing error code if FAILED"
+      },
+      {
+        "name": "content_type",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "size_bytes",
+        "type": "INT64",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "page_count",
+        "type": "INT64",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "model_version",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "prompt_version",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "rules_version",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "processing_attempts",
+        "type": "INT64",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "processing_duration_ms",
+        "type": "FLOAT64",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "uploaded_at",
+        "type": "TIMESTAMP",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "completed_at",
+        "type": "TIMESTAMP",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "loaded_at",
+        "type": "TIMESTAMP",
+        "mode": "REQUIRED",
+        "description": ""
+      }
+    ]
+  },
+  "extracted_transactions": {
+    "description": "Approved transactions only (VALID, or APPROVED after review).",
+    "partition": {
+      "field": "document_date",
+      "type": "MONTH"
+    },
+    "clustering": [
+      "user_id",
+      "expense_category"
+    ],
+    "schema": [
+      {
+        "name": "document_id",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "user_id",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "document_type",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "merchant_name",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "merchant_address",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "document_date",
+        "type": "DATE",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "due_date",
+        "type": "DATE",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "document_number",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "currency",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "subtotal",
+        "type": "NUMERIC",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "tax_amount",
+        "type": "NUMERIC",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "discount_amount",
+        "type": "NUMERIC",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "total_amount",
+        "type": "NUMERIC",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "expense_category",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "payment_method",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "processing_status",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "record_source",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": "AI (validated automatically) or REVIEWED"
+      },
+      {
+        "name": "model_version",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "approved_by",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "approved_at",
+        "type": "TIMESTAMP",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "loaded_at",
+        "type": "TIMESTAMP",
+        "mode": "REQUIRED",
+        "description": ""
+      }
+    ]
+  },
+  "line_items": {
+    "description": "Line items of approved transactions, linked by document_id.",
+    "partition": {
+      "field": "document_date",
+      "type": "MONTH"
+    },
+    "clustering": [
+      "user_id",
+      "document_id"
+    ],
+    "schema": [
+      {
+        "name": "document_id",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "user_id",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "line_number",
+        "type": "INT64",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "description",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "quantity",
+        "type": "NUMERIC",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "unit_price",
+        "type": "NUMERIC",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "total_price",
+        "type": "NUMERIC",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "currency",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "document_date",
+        "type": "DATE",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "loaded_at",
+        "type": "TIMESTAMP",
+        "mode": "REQUIRED",
+        "description": ""
+      }
+    ]
+  },
+  "review_records": {
+    "description": "Audit trail of manual review actions and field corrections.",
+    "partition": {
+      "field": "reviewed_at",
+      "type": "DAY"
+    },
+    "clustering": [
+      "user_id",
+      "document_id"
+    ],
+    "schema": [
+      {
+        "name": "review_id",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "document_id",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "user_id",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "action",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": "CORRECTION, APPROVE or REJECT"
+      },
+      {
+        "name": "field_name",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "original_value",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "Value extracted by Gemini"
+      },
+      {
+        "name": "corrected_value",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "reason",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "reviewer_id",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "model_version",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "reviewed_at",
+        "type": "TIMESTAMP",
+        "mode": "REQUIRED",
+        "description": ""
+      }
+    ]
+  },
+  "extraction_metrics": {
+    "description": "Per-extraction performance metrics (production and evaluation runs).",
+    "partition": {
+      "field": "processed_at",
+      "type": "DAY"
+    },
+    "clustering": [
+      "model_version"
+    ],
+    "schema": [
+      {
+        "name": "metric_id",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": "document_id:generation, or run_id:document_id"
+      },
+      {
+        "name": "document_id",
+        "type": "STRING",
+        "mode": "REQUIRED",
+        "description": ""
+      },
+      {
+        "name": "user_id",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "evaluation_run_id",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "Set for benchmark runs (Phase 10)"
+      },
+      {
+        "name": "model",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "model_version",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "prompt_version",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "location",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "mime_type",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "page_count",
+        "type": "INT64",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "latency_ms",
+        "type": "FLOAT64",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "gemini_attempts",
+        "type": "INT64",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "prompt_tokens",
+        "type": "INT64",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "output_tokens",
+        "type": "INT64",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "thoughts_tokens",
+        "type": "INT64",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "total_tokens",
+        "type": "INT64",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "outcome",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "Status after validation"
+      },
+      {
+        "name": "missing_field_count",
+        "type": "INT64",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "extraction_warning_count",
+        "type": "INT64",
+        "mode": "NULLABLE",
+        "description": ""
+      },
+      {
+        "name": "fields_compared",
+        "type": "INT64",
+        "mode": "NULLABLE",
+        "description": "Evaluation only"
+      },
+      {
+        "name": "fields_correct",
+        "type": "INT64",
+        "mode": "NULLABLE",
+        "description": "Evaluation only"
+      },
+      {
+        "name": "processed_at",
+        "type": "TIMESTAMP",
+        "mode": "REQUIRED",
+        "description": ""
+      }
+    ]
+  }
+}

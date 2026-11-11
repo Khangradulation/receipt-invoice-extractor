@@ -20,7 +20,7 @@ A phase is only marked done after its deliverable has been verified.
 | 8 | React frontend | Done — verified end to end in the browser (see Phase log) |
 | 9 | Manual review workflow | Done — verified live (see Phase log) |
 | 10 | Extraction evaluation framework | Done — full run complete (see Phase log) |
-| 11 | Terraform infrastructure | Not started |
+| 11 | Terraform infrastructure | Done — dev applied (see Phase log) |
 | 12 | GitHub Actions CI/CD | Not started |
 | 13 | Security | Not started |
 | 14 | Monitoring and observability | Not started |
@@ -571,7 +571,45 @@ committed in `evaluation/reports/full-150-20261110/`):
 - Every synthetic receipt prints its payment as "Paid: ...". Receipts that show only "VISA ****1234"
   or "Debit card contactless", with no "Paid" wording, are not covered, so over-caution on those
   is not ruled out. Worth adding to a harder dataset tier.
-- The deployed worker (`receipt-worker-00003`) still runs prompt `2026-11-08.1` until it is
-  redeployed.
+- Resolved 2026-11-11: the worker was redeployed as `receipt-worker-00004` (image
+  `worker:4c921b4`, prompt `2026-11-11.1`). `make test-pipeline-live` passed 3/3 and the worker
+  logs show the new prompt version.
 
-**Next:** merge Phase 10, redeploy the worker, then Phase 11 (Terraform).
+**Next:** Phase 11 (Terraform).
+
+### Phase 11 — Terraform infrastructure (2026-11-11)
+
+**Built**
+- Remote state: `ops/gcp/bootstrap-tfstate.sh` creates a versioned, private state bucket; GCS
+  backend with prefixes `receipt-extractor/dev` and `receipt-extractor/prod`.
+- Modules: project_services, service_accounts, project_iam, storage, firestore, bigquery,
+  artifact_registry, cloud_run_service, eventarc_gcs_trigger, github_wif, budget_guard, identity,
+  monitoring, composed by `modules/stack`.
+- `environments/dev` (with `imports.tf` adopting the resources made by `ops/gcp/*.sh`) and
+  `environments/prod` (separate project and state; no resources applied).
+- BigQuery tables generated from the Python specs (`make sql-schema` → `tables.json`) with a drift
+  test.
+- Workload Identity Federation for GitHub (provider restricted to this repository) and the
+  `receipt-ci-deployer` account, ready for Phase 12. No keys created.
+- Monitoring: 4 log-based metrics, 3 alert policies (no notification channel yet; Phase 14).
+- `make tf-fmt`, `make tf-validate` (both in `make check`) and `make tf-plan-dev`.
+
+**Plan review before apply** caught and fixed three problems: the budget name would have shown a
+literal `${var.budget_amount}`, the worker would have lost startup CPU boost, and Cloud Run
+deletion protection would have been switched off.
+
+**Verified (dev, `receipt-extractor-lkmljr`)**
+- `terraform apply`: "Apply complete! Resources: 23 imported, 60 added, 11 changed, 0 destroyed."
+- Re-plan straight after: "No changes. Your infrastructure matches the configuration."
+- Worker still on revision `receipt-worker-00004-h96` (now labelled); Firestore delete protection
+  enabled; budget "Receipt Extractor $10 cap (auto-stop)" on topic `budget-alerts`; metrics and
+  alert policies enabled.
+- `make test-pipeline-live` after the apply: 3/3 passed (upload → Eventarc → worker → Gemini).
+
+**Not done / not verified**
+- Prod environment validated only (`terraform validate`); no prod project exists yet.
+- API and frontend Cloud Run services are defined but not created until CI builds their first
+  images (Phase 12).
+- The kill-switch function's code is still deployed by its README command, not Terraform.
+
+**Next:** Phase 12 (GitHub Actions CI/CD).
