@@ -1,13 +1,10 @@
-# Production uses its own GCP project. Copy to terraform.tfvars (git-ignored).
-# Applied only through the protected deploy-prod workflow (Phase 12), never from a laptop.
+# Production uses its own GCP project. Copy to terraform.tfvars (git-ignored) for the one-time
+# bootstrap only (docs/deployment.md); after that, the protected deploy-prod workflow applies it.
 project_id        = "your-prod-project-id"
 project_number    = "123456789012"
 billing_account   = "XXXXXX-XXXXXX-XXXXXX"
 budget_amount     = 50
 github_repository = "owner/receipt-invoice-extractor"
-web_origins       = ["https://app.example.com"]
-auth_domains      = ["app.example.com"]
-worker_image      = "us-central1-docker.pkg.dev/your-prod-project-id/receipt-extractor/worker:<release-tag>"
-# api_image      = "...api:<release-tag>"
-# frontend_image = "...frontend:<release-tag>"
+# web_origins  = ["https://app.example.com"]  # extra origins; the frontend's run.app URL is automatic
+# auth_domains = ["app.example.com"]
 # notification_channels = ["projects/.../notificationChannels/..."]

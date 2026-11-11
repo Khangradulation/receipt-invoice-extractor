@@ -9,6 +9,11 @@ locals {
   sa_email         = module.service_accounts.emails
   gcs_agent        = "serviceAccount:service-${var.project_number}@gs-project-accounts.iam.gserviceaccount.com"
   pubsub_agent     = "serviceAccount:service-${var.project_number}@gcp-sa-pubsub.iam.gserviceaccount.com"
+  # Cloud Run's deterministic URLs (https://SERVICE-PROJECT_NUMBER.REGION.run.app), known before
+  # the services exist, so CORS and sign-in can allow the web app on the first apply.
+  frontend_host = "receipt-frontend-${var.project_number}.${var.region}.run.app"
+  api_url       = "https://receipt-api-${var.project_number}.${var.region}.run.app"
+  web_origins   = distinct(concat(var.web_origins, ["https://${local.frontend_host}"]))
   app_env = {
     ENVIRONMENT          = var.environment
     LOG_LEVEL            = "INFO"
@@ -53,7 +58,7 @@ module "documents" {
   project_id   = var.project_id
   name         = local.documents_bucket
   location     = var.region
-  cors_origins = var.web_origins
+  cors_origins = local.web_origins
   labels       = merge(local.labels, { component = "documents" })
   iam_members = [
     { role = "roles/storage.objectCreator", member = local.sa["receipt-api"] },
@@ -116,7 +121,7 @@ module "worker" {
   project_id      = var.project_id
   location        = var.region
   name            = "receipt-worker"
-  image           = var.worker_image
+  image           = var.initial_image
   service_account = local.sa_email["receipt-worker"]
   ingress         = "INGRESS_TRAFFIC_INTERNAL_ONLY"
   invoker_members = [local.sa["receipt-eventarc"]]
@@ -140,12 +145,11 @@ module "upload_trigger" {
 }
 
 module "api" {
-  count           = var.api_image == null ? 0 : 1
   source          = "../cloud_run_service"
   project_id      = var.project_id
   location        = var.region
   name            = "receipt-api"
-  image           = var.api_image
+  image           = var.initial_image
   service_account = local.sa_email["receipt-api"]
   ingress         = "INGRESS_TRAFFIC_ALL"
   invoker_members = ["allUsers"] # public; every endpoint except /health requires a Firebase token
@@ -156,18 +160,17 @@ module "api" {
   env = merge(local.app_env, {
     SIGNING_SERVICE_ACCOUNT = local.sa_email["receipt-api"]
     FIREBASE_PROJECT_ID     = var.project_id
-    CORS_ALLOWED_ORIGINS    = join(",", var.web_origins)
+    CORS_ALLOWED_ORIGINS    = join(",", local.web_origins)
   })
   labels = { app = "receipt-extractor", component = "api" }
 }
 
 module "frontend" {
-  count           = var.frontend_image == null ? 0 : 1
   source          = "../cloud_run_service"
   project_id      = var.project_id
   location        = var.region
   name            = "receipt-frontend"
-  image           = var.frontend_image
+  image           = var.initial_image
   service_account = local.sa_email["receipt-frontend"]
   ingress         = "INGRESS_TRAFFIC_ALL"
   invoker_members = ["allUsers"]
@@ -206,13 +209,15 @@ resource "google_service_account_iam_member" "api_signers" {
 
 # --- CI/CD (GitHub Actions via Workload Identity Federation) ----------------------------------
 module "github_wif" {
-  source            = "../github_wif"
-  project_id        = var.project_id
-  github_repository = var.github_repository
-  deployer_roles    = ["roles/run.developer"]
+  source             = "../github_wif"
+  project_id         = var.project_id
+  github_repository  = var.github_repository
+  github_environment = var.github_environment
+  deployer_roles     = ["roles/run.developer"]
   act_as_service_accounts = [
     local.sa_email["receipt-api"], local.sa_email["receipt-worker"], local.sa_email["receipt-frontend"],
   ]
+  terraform_runner_roles = var.terraform_runner_roles
 }
 
 # --- Cost guard, auth, monitoring -------------------------------------------------------------
@@ -228,7 +233,7 @@ module "budget_guard" {
 module "identity" {
   source             = "../identity"
   project_id         = var.project_id
-  authorized_domains = concat(var.auth_domains, ["${var.project_id}.firebaseapp.com", "${var.project_id}.web.app"])
+  authorized_domains = distinct(concat(var.auth_domains, [local.frontend_host, "${var.project_id}.firebaseapp.com", "${var.project_id}.web.app"]))
 }
 
 module "monitoring" {

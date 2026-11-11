@@ -33,26 +33,43 @@ variable "developer_members" {
   default     = []
 }
 variable "web_origins" {
-  description = "Browser origins of the web app (bucket CORS and the API's CORS); no localhost in prod"
+  description = "Extra browser origins (e.g. a custom domain); the frontend's run.app URL is always allowed. No localhost in prod"
   type        = list(string)
+  default     = []
 }
 variable "auth_domains" {
-  description = "Domains allowed to use Firebase sign-in; no localhost in prod"
+  description = "Extra Firebase sign-in domains; the frontend's run.app host is always allowed. No localhost in prod"
   type        = list(string)
+  default     = []
 }
-variable "worker_image" {
-  description = "Image used if the worker service has to be created; later images come from CI"
+variable "initial_image" {
+  description = "Placeholder image for newly created Cloud Run services; CI deploys the real images"
   type        = string
+  default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
-variable "api_image" {
-  description = "API image; the API service is created only once an image exists (Phase 12 CI)"
+variable "github_environment" {
+  description = "GitHub Actions environment whose jobs may deploy"
   type        = string
-  default     = null
+  default     = "production"
 }
-variable "frontend_image" {
-  description = "Frontend image; created only once an image exists (Phase 12 CI)"
-  type        = string
-  default     = null
+variable "terraform_runner_roles" {
+  description = "Project roles for the account deploy-prod uses to run terraform apply"
+  type        = list(string)
+  # Enough to manage every resource in modules/stack. The budget additionally needs
+  # roles/billing.costsManager on the billing account, granted outside this project.
+  default = [
+    "roles/editor",
+    "roles/resourcemanager.projectIamAdmin",
+    "roles/iam.serviceAccountAdmin",
+    "roles/iam.workloadIdentityPoolAdmin",
+    "roles/iam.roleAdmin",
+    "roles/run.admin",
+    "roles/storage.admin",
+    "roles/bigquery.admin",
+    "roles/eventarc.admin",
+    "roles/firebaseauth.admin",
+    "roles/serviceusage.serviceUsageAdmin",
+  ]
 }
 variable "gemini_model" {
   type    = string

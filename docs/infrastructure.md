@@ -14,9 +14,9 @@ inputs and keep separate remote state.
 | Firestore | `(default)` database with delete protection, composite indexes |
 | BigQuery | `receipt_analytics` dataset and its five tables (generated from the Python schema specs) |
 | Containers | Artifact Registry repository with cleanup policies |
-| Cloud Run | Worker (always); API and frontend once CI has built their first image |
+| Cloud Run | Worker, API and frontend services (created with a placeholder image; CI deploys the real images) |
 | Events | Eventarc trigger: object finalized in the bucket → worker |
-| CI | Workload Identity Federation for GitHub Actions (restricted to this repository) and the `receipt-ci-deployer` account |
+| CI | Workload Identity Federation for GitHub Actions (this repository, one GitHub environment) and the `receipt-ci-deployer` account; prod also `receipt-ci-terraform` |
 | Cost | Monthly budget, Pub/Sub topic and kill-switch permissions |
 | Auth | Firebase Authentication (email/password, authorised domains) |
 | Monitoring | Log-based metrics and alert policies |
@@ -41,6 +41,8 @@ first apply, a fresh `terraform plan` reports **No changes**.
 
 `make sql-schema` writes both `sql/schema/*.sql` and `terraform/modules/bigquery/tables.json` from
 the same Python specs. A unit test fails if `tables.json` is out of date.
+
+See [deployment.md](deployment.md) for how CI uses this.
 
 ## Commands
 

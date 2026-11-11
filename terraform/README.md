@@ -21,7 +21,7 @@ terraform/
     monitoring/            log-based metrics + alert policies
   environments/
     dev/                   dev project; imports.tf adopts resources created by ops/gcp/*.sh
-    prod/                  separate project; applied only via the protected deploy-prod workflow
+    prod/                  separate project; bootstrap once by hand, then only via deploy-prod
 ```
 
 ## Usage
@@ -49,9 +49,11 @@ Or from the repository root: `make tf-fmt` and `make tf-validate` (both run in `
 - **Least privilege:** each workload has its own service account. Bucket, dataset, repository and
   service permissions are granted on that resource only. IAM grants are non-authoritative (they
   never remove other access).
-- **Images:** Terraform creates Cloud Run services and owns their configuration; CI deploys new
-  images (image changes are ignored by Terraform). The API and frontend services are created once
-  CI has built their first image (`api_image` / `frontend_image`).
+- **Images:** Terraform creates the Cloud Run services (with a public placeholder image) and owns
+  their configuration; CI deploys the real images (image changes are ignored by Terraform). See
+  [docs/deployment.md](../docs/deployment.md).
+- **Web origin:** the frontend's predictable run.app URL is always added to CORS and Firebase's
+  authorised domains; `web_origins` / `auth_domains` are extras (e.g. a custom domain).
 - **Labels:** every labelled resource carries `app` and `env`.
 
 ## Not managed here

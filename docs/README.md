@@ -14,3 +14,4 @@ Architecture, setup, deployment, security and evaluation docs. Each phase adds t
 - [review.md](review.md) — human-in-the-loop review workflow, audit trail, concurrency
 - [evaluation.md](evaluation.md) — extraction benchmark: dataset, scoring, results
 - [infrastructure.md](infrastructure.md) — Terraform: what it manages, safety, state
+- [deployment.md](deployment.md) — CI/CD workflows, keyless auth, smoke test, releases

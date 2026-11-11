@@ -3,7 +3,7 @@
 BACKEND := backend
 FRONTEND := frontend
 
-.PHONY: help install api worker web check test lint format backend-check frontend-check docker-build samples extract test-gemini-live test-storage-live test-pipeline-live test-bigquery-live test-api-live sql-schema dataset evaluate tf-fmt tf-validate tf-plan-dev
+.PHONY: help install api worker web check test lint format backend-check frontend-check docker-build samples extract test-gemini-live test-storage-live test-pipeline-live test-bigquery-live test-api-live sql-schema dataset evaluate tf-fmt tf-validate tf-plan-dev audit smoke-test
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -31,6 +31,16 @@ frontend-check: ## Lint, format-check, type-check, test and build the frontend
 	cd $(FRONTEND) && npm run lint && npm run format:check && npm run typecheck && npm test && npm run build
 
 check: backend-check frontend-check tf-fmt tf-validate ## Run every check (what CI runs)
+
+audit: ## Check Python and npm dependencies for known vulnerabilities
+	cd $(BACKEND) && uv export --frozen --all-packages --no-dev --no-emit-workspace \
+		--format requirements-txt -o .audit-requirements.txt >/dev/null && \
+		uvx pip-audit -r .audit-requirements.txt --require-hashes --disable-pip --progress-spinner off; \
+		status=$$?; rm -f .audit-requirements.txt; exit $$status
+	cd $(FRONTEND) && npm audit --audit-level=high
+
+smoke-test: ## Smoke-test a deployed environment: make smoke-test PROJECT_ID=... [REGION=us-central1]
+	PROJECT_ID=$(PROJECT_ID) ./ops/ci/smoke-test.sh
 
 test: ## Run backend and frontend unit tests
 	cd $(BACKEND) && uv run pytest
