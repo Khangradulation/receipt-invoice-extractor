@@ -12,3 +12,4 @@ Architecture, setup, deployment, security and evaluation docs. Each phase adds t
 - [api.md](api.md) — REST API reference, pagination, errors, review semantics
 - [frontend.md](frontend.md) — pages, auth flow, configuration, tests
 - [review.md](review.md) — human-in-the-loop review workflow, audit trail, concurrency
+- [evaluation.md](evaluation.md) — extraction benchmark: dataset, scoring, results

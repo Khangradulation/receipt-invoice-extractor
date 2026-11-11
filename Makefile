@@ -3,7 +3,7 @@
 BACKEND := backend
 FRONTEND := frontend
 
-.PHONY: help install api worker web check test lint format backend-check frontend-check docker-build samples extract test-gemini-live test-storage-live test-pipeline-live test-bigquery-live test-api-live sql-schema
+.PHONY: help install api worker web check test lint format backend-check frontend-check docker-build samples extract test-gemini-live test-storage-live test-pipeline-live test-bigquery-live test-api-live sql-schema dataset evaluate
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -24,7 +24,8 @@ web: ## Run the Vite dev server on :5173 (proxies /api to :8080)
 backend-check: ## Lint, format-check, type-check and test the backend
 	cd $(BACKEND) && uv run ruff check . ../evaluation ../ops && uv run ruff format --check . ../evaluation ../ops && \
 		uv run mypy shared/src api/src worker/src && uv run pytest && \
-		uv run pytest -q ../ops/budget-kill-switch
+		uv run pytest -q ../ops/budget-kill-switch && \
+		uv run pytest -q -p no:cacheprovider ../evaluation/tests
 
 frontend-check: ## Lint, format-check, type-check, test and build the frontend
 	cd $(FRONTEND) && npm run lint && npm run format:check && npm run typecheck && npm test && npm run build
@@ -55,6 +56,12 @@ test-bigquery-live: ## Live BigQuery idempotency + analytics queries (needs data
 
 test-api-live: samples ## Live API flow: upload, list, review, approve, analytics (billable)
 	cd $(BACKEND) && RUN_PIPELINE_INTEGRATION=1 uv run pytest -m integration -v shared/tests/integration/test_api_live.py
+
+dataset: ## Generate the labelled synthetic benchmark (150 docs) in evaluation/dataset
+	cd $(BACKEND) && uv run python ../evaluation/synthetic/generate.py
+
+evaluate: ## Run the extraction benchmark (billable Gemini calls; ARGS="--limit 5")
+	cd $(BACKEND) && uv run python ../evaluation/run_benchmark.py $(ARGS)
 
 sql-schema: ## Regenerate sql/schema/*.sql from the Python table specs
 	cd $(BACKEND) && uv run python -m receipt_shared.analytics.schema ../sql/schema

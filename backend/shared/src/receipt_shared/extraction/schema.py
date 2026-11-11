@@ -98,7 +98,9 @@ class GeminiExtraction(BaseModel):
         default=None, description="Final amount paid or due, including tax."
     )
     payment_method: PaymentMethodWire | None = Field(
-        default=None, description="How the document was paid, if shown."
+        default=None,
+        description="How a completed payment was made, if shown. Null for payment terms or "
+        "instructions about a future payment.",
     )
     line_items: list[GeminiLineItem] = Field(
         default_factory=list, description="Every visible line item, in document order."

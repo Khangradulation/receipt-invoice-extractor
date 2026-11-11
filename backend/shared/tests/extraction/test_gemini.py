@@ -291,3 +291,10 @@ def test_build_client_uses_vertex_with_timeout(settings: Settings) -> None:
     assert api.project == "test-project"
     assert api.location == "us-central1"
     assert api._http_options.timeout == 120_000
+
+
+def test_prompt_separates_payment_terms_from_completed_payments() -> None:
+    rule = SYSTEM_INSTRUCTION[SYSTEM_INSTRUCTION.index("9. payment_method") :]
+    assert "actually made" in rule
+    assert "Payment by bank transfer" in rule
+    assert "payment_method is null" in rule
