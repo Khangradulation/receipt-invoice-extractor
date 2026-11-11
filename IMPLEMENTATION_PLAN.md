@@ -19,7 +19,7 @@ A phase is only marked done after its deliverable has been verified.
 | 7 | FastAPI backend | Done — verified live in-process; not yet deployed (see Phase log) |
 | 8 | React frontend | Done — verified end to end in the browser (see Phase log) |
 | 9 | Manual review workflow | Done — verified live (see Phase log) |
-| 10 | Extraction evaluation framework | Not started |
+| 10 | Extraction evaluation framework | Done — full run complete (see Phase log) |
 | 11 | Terraform infrastructure | Not started |
 | 12 | GitHub Actions CI/CD | Not started |
 | 13 | Security | Not started |
@@ -500,3 +500,78 @@ This phase closed the remaining gaps and verified everything end to end. Details
   only in Firestore (which is what the UI reads).
 
 **Next:** Phase 10 — Extraction evaluation framework.
+
+### Phase 10 — Extraction evaluation framework (2026-11-10)
+
+**Implemented** (details: [docs/evaluation.md](docs/evaluation.md))
+- `evaluation/synthetic/`: deterministic generator (seed 20261110) of 150 fictional documents with
+  ground-truth JSON and a manifest:
+  - 90 receipts and 60 invoices; thermal, classic and invoice layouts;
+  - PDF (18 multi-page), PNG and JPEG; 8 currencies; 4 date styles;
+  - VAT-inclusive prices, multiple taxes, discounts, no-tax, unprinted quantities, photo-like
+    degradation;
+  - 5 prompt-injection and 5 inconsistent-total documents.
+
+  Ground truth records what is printed. ASCII-only guard.
+- `evaluation/benchmark/`: field scoring (correct / wrong / missed / hallucinated; Decimal money
+  within the currency's minor unit; normalised text; IDs), line-item matching
+  (precision/recall/F1), aggregation (spec metrics, review metrics, injection resistance, latency,
+  tokens, breakdowns), Markdown renderer. `evaluation/REPORT_TEMPLATE.md`.
+- `evaluation/run_benchmark.py`: parallel, resumable runner using the production extractor and
+  validator; writes `results.jsonl`, `report.json` and `report.md` stamped with model version,
+  prompt version, rules version, date and command; `--to-bigquery` logs `extraction_metrics`
+  rows.
+- `make dataset`, `make evaluate`. Evaluation unit tests run in `make check`.
+
+**Bugs caught before the paid run:** 7 image invoices would have lost page 2 (images now
+single-page); tax tags were applied when no tax was printed; `&` vs "and" was scored as wrong.
+
+**Results — run `full-150-20261110`** (`gemini-3.8-flash`, prompt `2026-11-08.1`; report
+committed in `evaluation/reports/full-150-20261110/`):
+- 150/150 succeeded, 0 errors.
+- Exact required-field accuracy **100%**; core document accuracy **100%**; fully correct
+  documents (core + every line item) **100%**; field accuracy **97.0%** (1,892/1,950).
+- Merchant, date, subtotal, tax, total, currency and document type: **100%** each. Line items:
+  precision, recall and F1 100%.
+- **Weakness: `payment_method` 61.3%.** On 58 of 60 invoices the model returned `bank_transfer`
+  from the payment *terms* line, although nothing was paid. This accounts for the whole
+  hallucination rate (19.1% of unprinted fields).
+- Review: 3.3% overall = exactly the 5 inconsistent documents (100% flagged); 0% false review on
+  clean documents. Prompt injection resisted: 5/5.
+- Latency mean 9.7 s, p50 7.1 s, p95 20.1 s (multi-page invoices slowest, 13.3 s mean); 559,504
+  tokens (≈3.7k per document).
+- BigQuery: 150 `extraction_metrics` rows; `extraction_accuracy_evaluation` returns the run
+  (field accuracy 0.9703).
+
+**Interpretation and limitations**
+- **The dataset is saturated:** core accuracy is 100% across every format, layout, currency and
+  scenario. These are clean, computer-rendered synthetic documents (with mild rotation/blur at
+  most), so the scores say little about crumpled, faded, handwritten or photographed real
+  receipts. A harder tier (heavy noise, low resolution, handwriting, skewed photos, real-world
+  layouts under a suitable licence) is needed to discriminate between models or prompts.
+- Expense category scored 100% partly because synthetic merchant names are unambiguous.
+
+**Prompt fix and re-measure (2026-11-11)**
+- Prompt `2026-11-11.1`: `payment_method` only when a completed payment is shown; payment terms
+  and instructions mean null. Response-schema description updated to match. New
+  `--document-type` benchmark option.
+- Run `invoices-60-prompt-20261111` (`gemini-3.8-flash`, the same 60 invoices):
+  `payment_method` **2/60 → 60/60**; invoice field accuracy **92.6% → 100%**; hallucination rate
+  0%; core fields, line items, review flags and injection resistance unchanged at 100%; 0 errors.
+- Latency: median 9.3 s → 10.1 s, but mean 10.9 s → 20.2 s and p95 66.3 s, from a handful of
+  documents taking 60–75 s. All documents took one attempt and token counts were unchanged, so
+  the prompt doesn't explain it; temporary service-side slowness is likely but not proven.
+
+- Run `receipts-90-prompt-20261111` (the same 90 receipts): `payment_method` stayed **90/90**, field
+  accuracy 100%, 0 errors, no regression in any field. Median latency 6.2 s → 6.8 s; mean
+  8.8 s → 11.6 s, again from a slow tail with one attempt each.
+- Combined on prompt `2026-11-11.1`: all 150 documents at 100% field accuracy (1,950/1,950).
+
+**Not verified**
+- Every synthetic receipt prints its payment as "Paid: ...". Receipts that show only "VISA ****1234"
+  or "Debit card contactless", with no "Paid" wording, are not covered, so over-caution on those
+  is not ruled out. Worth adding to a harder dataset tier.
+- The deployed worker (`receipt-worker-00003`) still runs prompt `2026-11-08.1` until it is
+  redeployed.
+
+**Next:** merge Phase 10, redeploy the worker, then Phase 11 (Terraform).

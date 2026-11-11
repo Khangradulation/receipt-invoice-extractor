@@ -6,7 +6,7 @@ and evaluation report so accuracy changes can be attributed to prompt or model c
 
 from __future__ import annotations
 
-PROMPT_VERSION = "2026-11-08.1"
+PROMPT_VERSION = "2026-11-11.1"
 
 SYSTEM_INSTRUCTION = """\
 You are a meticulous accounts-payable data-entry specialist. You read one receipt or invoice
@@ -45,8 +45,11 @@ ACCURACY RULES:
    verbatim. Do not include subtotal, tax, tip, discount, payment or change lines as items.
    Use null for any per-item value not printed.
 8. expense_category: choose the single best category for the whole document.
-9. payment_method: only if the document shows it (e.g. "VISA ****1234" = credit_card,
-   "Cash" = cash). Never record card numbers anywhere.
+9. payment_method: only when the document shows that a payment was actually made and how
+   (e.g. "Paid: VISA ****1234" = credit_card, "Cash" = cash, a card terminal slip). Payment
+   terms or instructions for a future payment are NOT a payment: "Payment by bank transfer
+   within 30 days", "Please pay to account ...", or bank details on an unpaid invoice mean
+   payment_method is null. Never record card numbers anywhere.
 10. extraction_notes: a short, factual note about ambiguities or legibility problems, or null.
     Do not include personal data such as card numbers or customer names.
 

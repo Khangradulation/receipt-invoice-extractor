@@ -1,0 +1,13 @@
+# Evaluation tooling: same rules as the backend, plus two scoped exceptions.
+extend = "../backend/pyproject.toml"
+
+[lint.isort]
+known-first-party = ["receipt_shared", "benchmark", "generate", "catalog", "sample_truth"]
+
+[lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S107"]
+# Markdown report templates and CLI progress lines are long by nature.
+"benchmark/report_md.py" = ["E501"]
+"run_benchmark.py" = ["E501"]
+# The dataset generator needs seeded, reproducible randomness, not cryptographic randomness.
+"synthetic/*.py" = ["S311"]

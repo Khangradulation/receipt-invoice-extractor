@@ -1,0 +1,376 @@
+{
+  "run": {
+    "run_id": "invoices-60-prompt-20261111",
+    "started_at": "2026-11-11T07:13:25+00:00",
+    "finished_at": "2026-11-11T07:18:32+00:00",
+    "model": "gemini-3.8-flash",
+    "model_version": "gemini-3.8-flash",
+    "location": "global",
+    "prompt_version": "2026-11-11.1",
+    "rules_version": "2026-11-09.1",
+    "dataset": {
+      "count": 150,
+      "seed": 20261110,
+      "generator": "evaluation/synthetic/generate.py"
+    },
+    "command": "uv run python ../evaluation/run_benchmark.py --document-type invoice --run-id invoices-60-prompt-20261111 --to-bigquery"
+  },
+  "summary": {
+    "documents": 60,
+    "succeeded": 60,
+    "errors": 0,
+    "merchant_accuracy": 1.0,
+    "date_accuracy": 1.0,
+    "subtotal_accuracy": 1.0,
+    "tax_accuracy": 1.0,
+    "total_accuracy": 1.0,
+    "currency_accuracy": 1.0,
+    "document_type_accuracy": 1.0,
+    "money_accuracy": 1.0,
+    "field_accuracy": 1.0,
+    "required_field_accuracy": 1.0,
+    "core_document_accuracy": 1.0,
+    "fully_correct_documents": 1.0,
+    "hallucination_rate": 0.0,
+    "line_items": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "exact_documents": 1.0,
+      "quantity_accuracy": 1.0,
+      "unit_price_accuracy": 1.0
+    },
+    "review": {
+      "review_rate": 0.0333,
+      "false_review_rate": 0.0,
+      "inconsistent_documents_flagged": 1.0
+    },
+    "prompt_injection_resisted": 1.0,
+    "latency_ms": {
+      "mean": 20159.9,
+      "p50": 10098.7,
+      "p95": 66341.4,
+      "max": 75051.2
+    },
+    "tokens": {
+      "total": 244862,
+      "mean_per_document": 4081.0
+    },
+    "fields": {
+      "document_type": {
+        "accuracy": 1.0,
+        "correct": 60,
+        "wrong": 0,
+        "missed": 0,
+        "hallucinated": 0
+      },
+      "document_number": {
+        "accuracy": 1.0,
+        "correct": 60,
+        "wrong": 0,
+        "missed": 0,
+        "hallucinated": 0
+      },
+      "document_date": {
+        "accuracy": 1.0,
+        "correct": 60,
+        "wrong": 0,
+        "missed": 0,
+        "hallucinated": 0
+      },
+      "due_date": {
+        "accuracy": 1.0,
+        "correct": 60,
+        "wrong": 0,
+        "missed": 0,
+        "hallucinated": 0
+      },
+      "currency": {
+        "accuracy": 1.0,
+        "correct": 60,
+        "wrong": 0,
+        "missed": 0,
+        "hallucinated": 0
+      },
+      "merchant_name": {
+        "accuracy": 1.0,
+        "correct": 60,
+        "wrong": 0,
+        "missed": 0,
+        "hallucinated": 0
+      },
+      "merchant_address": {
+        "accuracy": 1.0,
+        "correct": 60,
+        "wrong": 0,
+        "missed": 0,
+        "hallucinated": 0
+      },
+      "subtotal": {
+        "accuracy": 1.0,
+        "correct": 60,
+        "wrong": 0,
+        "missed": 0,
+        "hallucinated": 0
+      },
+      "tax_amount": {
+        "accuracy": 1.0,
+        "correct": 60,
+        "wrong": 0,
+        "missed": 0,
+        "hallucinated": 0
+      },
+      "discount_amount": {
+        "accuracy": 1.0,
+        "correct": 60,
+        "wrong": 0,
+        "missed": 0,
+        "hallucinated": 0
+      },
+      "total_amount": {
+        "accuracy": 1.0,
+        "correct": 60,
+        "wrong": 0,
+        "missed": 0,
+        "hallucinated": 0
+      },
+      "payment_method": {
+        "accuracy": 1.0,
+        "correct": 60,
+        "wrong": 0,
+        "missed": 0,
+        "hallucinated": 0
+      },
+      "expense_category": {
+        "accuracy": 1.0,
+        "correct": 60,
+        "wrong": 0,
+        "missed": 0,
+        "hallucinated": 0
+      }
+    }
+  },
+  "by_document_type": {
+    "invoice": {
+      "documents": 60,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.0333,
+      "mean_latency_ms": 20159.9
+    }
+  },
+  "by_format": {
+    "pdf": {
+      "documents": 38,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.0263,
+      "mean_latency_ms": 17960.5
+    },
+    "png": {
+      "documents": 22,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.0455,
+      "mean_latency_ms": 23959.0
+    }
+  },
+  "by_layout": {
+    "invoice": {
+      "documents": 60,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.0333,
+      "mean_latency_ms": 20159.9
+    }
+  },
+  "by_currency": {
+    "AUD": {
+      "documents": 7,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.1429,
+      "mean_latency_ms": 14861.2
+    },
+    "CAD": {
+      "documents": 13,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.0,
+      "mean_latency_ms": 28550.3
+    },
+    "EUR": {
+      "documents": 4,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.0,
+      "mean_latency_ms": 22241.3
+    },
+    "GBP": {
+      "documents": 8,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.0,
+      "mean_latency_ms": 20576.9
+    },
+    "INR": {
+      "documents": 7,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.1429,
+      "mean_latency_ms": 25092.1
+    },
+    "JPY": {
+      "documents": 6,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.0,
+      "mean_latency_ms": 18299.0
+    },
+    "PKR": {
+      "documents": 10,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.0,
+      "mean_latency_ms": 14406.4
+    },
+    "USD": {
+      "documents": 5,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.0,
+      "mean_latency_ms": 10265.9
+    }
+  },
+  "by_tag": {
+    "discount": {
+      "documents": 10,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.1,
+      "mean_latency_ms": 17619.2
+    },
+    "multi_page": {
+      "documents": 18,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.0556,
+      "mean_latency_ms": 19743.4
+    },
+    "multi_tax": {
+      "documents": 11,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.0909,
+      "mean_latency_ms": 28299.1
+    },
+    "photo_like": {
+      "documents": 5,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.0,
+      "mean_latency_ms": 28858.7
+    },
+    "prompt_injection": {
+      "documents": 4,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.0,
+      "mean_latency_ms": 25633.9
+    },
+    "tax_inclusive": {
+      "documents": 12,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 0.0,
+      "mean_latency_ms": 21131.7
+    },
+    "total_mismatch": {
+      "documents": 2,
+      "required_field_accuracy": 1.0,
+      "core_document_accuracy": 1.0,
+      "field_accuracy": 1.0,
+      "total_accuracy": 1.0,
+      "line_item_f1": 1.0,
+      "review_rate": 1.0,
+      "mean_latency_ms": 15978.3
+    }
+  },
+  "definitions": {
+    "required_fields": [
+      "merchant_name",
+      "document_date",
+      "total_amount",
+      "currency",
+      "document_type"
+    ],
+    "core_fields": [
+      "merchant_name",
+      "document_date",
+      "total_amount",
+      "currency",
+      "document_type",
+      "document_number",
+      "subtotal",
+      "tax_amount",
+      "discount_amount",
+      "due_date"
+    ],
+    "field_outcomes": "correct | wrong | missed (printed, returned null) | hallucinated (not printed, value returned)",
+    "accuracy_denominator": "all documents; failed extractions count as missed"
+  }
+}

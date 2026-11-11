@@ -44,9 +44,9 @@ override.tf.json
 terraform.tfvars
 !terraform.tfvars.example
 
-# Evaluation outputs
-evaluation/reports/*
-!evaluation/reports/.gitkeep
+# Evaluation outputs: per-document results stay local; published reports are committed
+evaluation/reports/**/results.jsonl
+evaluation/reports/smoke-*/
 
 # Firebase emulator data
 .firebase/
@@ -62,3 +62,6 @@ ui-debug.log
 
 # Generated sample documents
 evaluation/samples/out/
+
+# Generated benchmark dataset and run reports
+evaluation/dataset/
