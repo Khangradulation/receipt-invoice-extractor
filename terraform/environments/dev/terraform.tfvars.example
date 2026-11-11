@@ -3,6 +3,7 @@ project_id        = "your-dev-project-id"
 project_number    = "123456789012"
 billing_account   = "XXXXXX-XXXXXX-XXXXXX"
 github_repository = "owner/receipt-invoice-extractor"
+github_owner_id   = "12345678" # gh api users/<owner> -q .id
 developer_members = ["user:you@example.com"]
 # web_origins  = ["http://localhost:5173"]  # default; the frontend's run.app URL is automatic
 # notification_channels = ["projects/.../notificationChannels/..."]

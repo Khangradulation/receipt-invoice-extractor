@@ -10,6 +10,7 @@ module "stack" {
   billing_account        = var.billing_account
   budget_amount          = var.budget_amount
   github_repository      = var.github_repository
+  github_owner_id        = var.github_owner_id
   developer_members      = var.developer_members
   web_origins            = var.web_origins
   auth_domains           = var.auth_domains

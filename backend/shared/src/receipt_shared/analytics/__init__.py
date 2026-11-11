@@ -3,6 +3,7 @@
 from receipt_shared.analytics.bigquery import (
     AnalyticsWriteError,
     BigQueryAnalyticsWriter,
+    build_delete_script,
     build_parameters,
     build_write_script,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "AnalyticsRows",
     "AnalyticsWriteError",
     "BigQueryAnalyticsWriter",
+    "build_delete_script",
     "build_parameters",
     "build_rows",
     "build_write_script",

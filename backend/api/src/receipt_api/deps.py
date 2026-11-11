@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request, status
 
 from receipt_api.review_service import ReviewService
-from receipt_shared.analytics import AnalyticsQueries
+from receipt_shared.analytics import AnalyticsQueries, BigQueryAnalyticsWriter
 from receipt_shared.config import Settings
 from receipt_shared.repository import DocumentRepository, FirestoreDocumentRepository
 from receipt_shared.storage import DocumentStorage, StorageNotConfiguredError
@@ -43,18 +43,28 @@ def get_repository(request: Request) -> DocumentRepository:
     return repo
 
 
+def get_analytics_writer(request: Request) -> BigQueryAnalyticsWriter:
+    with _lock:
+        writer: BigQueryAnalyticsWriter | None = getattr(
+            request.app.state, "analytics_writer", None
+        )
+        if writer is None:
+            writer = BigQueryAnalyticsWriter(request.app.state.settings)
+            request.app.state.analytics_writer = writer
+    return writer
+
+
 def get_review_service(request: Request) -> ReviewService:
     with _lock:
         service: ReviewService | None = getattr(request.app.state, "review_service", None)
         if service is None:
-            from receipt_shared.analytics import BigQueryAnalyticsWriter
             from receipt_shared.validation import DocumentValidator
 
             settings = request.app.state.settings
             service = ReviewService(
                 repository=get_repository(request),
                 validator=DocumentValidator(settings=settings),
-                writer=BigQueryAnalyticsWriter(settings),
+                writer=get_analytics_writer(request),
             )
             request.app.state.review_service = service
     return service
@@ -74,3 +84,4 @@ StorageDep = Annotated[DocumentStorage, Depends(get_storage)]
 RepositoryDep = Annotated[DocumentRepository, Depends(get_repository)]
 ReviewServiceDep = Annotated[ReviewService, Depends(get_review_service)]
 AnalyticsDep = Annotated[AnalyticsQueries, Depends(get_analytics)]
+AnalyticsWriterDep = Annotated[BigQueryAnalyticsWriter, Depends(get_analytics_writer)]

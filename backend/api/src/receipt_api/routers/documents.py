@@ -1,4 +1,4 @@
-"""Document endpoints: upload URL, listing, details, status, extraction, file URL."""
+"""Document endpoints: upload URL, listing, details, status, extraction, file URL, delete."""
 
 from __future__ import annotations
 
@@ -9,11 +9,18 @@ from datetime import datetime
 from pathlib import PurePath
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field, field_validator
 
 from receipt_api.auth import CurrentUser
-from receipt_api.deps import RepositoryDep, ReviewServiceDep, SettingsDep, StorageDep
+from receipt_api.deletion import DocumentBusyError, delete_document
+from receipt_api.deps import (
+    AnalyticsWriterDep,
+    RepositoryDep,
+    ReviewServiceDep,
+    SettingsDep,
+    StorageDep,
+)
 from receipt_api.ownership import owned_record
 from receipt_api.ratelimit import rate_limit
 from receipt_api.review_service import ReviewService
@@ -265,3 +272,28 @@ def get_file_url(
     return FileUrlResponse(
         url=signed.url, expires_at=signed.expires_at, content_type=record.content_type
     )
+
+
+@router.delete(
+    "/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    summary="Permanently delete a document, its file and its analytics rows",
+    responses={
+        404: {"description": "Not found"},
+        409: {"description": "Upload or processing still in progress; try again later"},
+    },
+)
+def delete_document_endpoint(
+    document_id: str,
+    user: Annotated[CurrentUser, Depends(rate_limit("review_write"))],
+    repository: RepositoryDep,
+    storage: StorageDep,
+    analytics: AnalyticsWriterDep,
+) -> Response:
+    record = owned_record(repository, document_id, user)
+    try:
+        delete_document(record, repository=repository, storage=storage, analytics=analytics)
+    except DocumentBusyError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

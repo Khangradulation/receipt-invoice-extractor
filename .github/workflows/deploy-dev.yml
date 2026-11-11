@@ -104,4 +104,4 @@ jobs:
               --image "${REGISTRY}/${svc}:${tag}" --quiet
           done
       - name: Smoke test
-        run: EXPECT_TAG="${GITHUB_SHA::7}" ./ops/ci/smoke-test.sh
+        run: EXPECT_TAG="${GITHUB_SHA::7}" PROJECT_NUMBER="${{ vars.GCP_PROJECT_NUMBER }}" ./ops/ci/smoke-test.sh

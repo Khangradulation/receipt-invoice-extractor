@@ -12,6 +12,19 @@ variable "env" {
   type    = map(string)
   default = {}
 }
+variable "secret_env" {
+  description = <<-EOT
+    Environment variables read from Secret Manager at instance start, e.g.
+    { WEBHOOK_TOKEN = { secret = "webhook-token", version = "3" } }. Values never appear in
+    Terraform state or the service config. The runtime service account needs
+    roles/secretmanager.secretAccessor on each secret (grant it on the secret, not the project).
+  EOT
+  type = map(object({
+    secret  = string
+    version = string
+  }))
+  default = {}
+}
 variable "ingress" {
   description = "INGRESS_TRAFFIC_ALL | INGRESS_TRAFFIC_INTERNAL_ONLY | INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
   type        = string
@@ -96,6 +109,18 @@ resource "google_cloud_run_v2_service" "this" {
         content {
           name  = env.key
           value = env.value
+        }
+      }
+      dynamic "env" {
+        for_each = var.secret_env
+        content {
+          name = env.key
+          value_source {
+            secret_key_ref {
+              secret  = env.value.secret
+              version = env.value.version
+            }
+          }
         }
       }
     }

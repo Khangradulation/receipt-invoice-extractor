@@ -21,6 +21,7 @@ from receipt_shared.analytics.schema import (
     EXTRACTION_METRICS,
     LINE_ITEMS,
     REVIEW_RECORDS,
+    TABLES,
     qualified_dataset,
 )
 from receipt_shared.config import Settings
@@ -65,6 +66,25 @@ END;
 """.strip()  # noqa: S608
 
 
+def build_delete_script(dataset: str) -> str:
+    """Remove every row of one document from every table, atomically (user deletion)."""
+    # Only identifiers are interpolated (validated dataset, table-name constants).
+    deletes = "\n  ".join(
+        f"DELETE FROM `{dataset}.{table.name}` WHERE document_id = @document_id;"  # noqa: S608
+        for table in TABLES
+    )
+    return f"""
+BEGIN
+  BEGIN TRANSACTION;
+  {deletes}
+  COMMIT TRANSACTION;
+EXCEPTION WHEN ERROR THEN
+  ROLLBACK TRANSACTION;
+  RAISE USING MESSAGE = @@error.message;
+END;
+""".strip()
+
+
 def _dumps(value: Any) -> str | None:
     return None if value is None else json.dumps(value, separators=(",", ":"))
 
@@ -92,44 +112,26 @@ class BigQueryAnalyticsWriter:
             client = bigquery.Client(project=settings.gcp_project_id)
         self._client = client
         self._script = build_write_script(self._dataset)
+        self._delete_script = build_delete_script(self._dataset)
+
+    def delete(self, document_id: str) -> None:
+        """Delete the document's rows from every table. Idempotent."""
+        self._run(
+            self._delete_script,
+            [("document_id", document_id)],
+            operation="document-delete",
+            document_id=document_id,
+        )
+        logger.info("bigquery rows deleted", extra={"document_id": document_id})
 
     def write(self, rows: AnalyticsRows) -> None:
-        from google.api_core import exceptions as gexc
-        from google.cloud import bigquery
-
-        config = bigquery.QueryJobConfig(
-            query_parameters=[
-                bigquery.ScalarQueryParameter(name, "STRING", value)
-                for name, value in build_parameters(rows)
-            ],
-            labels={"app": "receipt-extractor", "operation": "document-write"},
-        )
         start = time.perf_counter()
-        try:
-            job = self._client.query(self._script, job_config=config, location=self._location)
-            job.result(timeout=120)
-        except (gexc.BadRequest, gexc.NotFound, gexc.Forbidden) as exc:
-            # Concurrent transactions on the same table are reported as 400 "aborted due to
-            # concurrent update"; those are worth retrying. Schema/permission errors are not.
-            message = str(getattr(exc, "message", exc))
-            retryable = "concurrent" in message.lower() or "aborted" in message.lower()
-            logger.error(
-                "bigquery write failed",
-                extra={"document_id": rows.document_id, "retryable": retryable,
-                       "error_type": type(exc).__name__},
-            )  # fmt: skip
-            raise AnalyticsWriteError(
-                f"BigQuery write failed: {type(exc).__name__}", retryable=retryable
-            ) from exc
-        except (gexc.GoogleAPIError, TimeoutError, OSError) as exc:
-            logger.error(
-                "bigquery write failed",
-                extra={"document_id": rows.document_id, "retryable": True,
-                       "error_type": type(exc).__name__},
-            )  # fmt: skip
-            raise AnalyticsWriteError(
-                f"BigQuery write failed: {type(exc).__name__}", retryable=True
-            ) from exc
+        self._run(
+            self._script,
+            build_parameters(rows),
+            operation="document-write",
+            document_id=rows.document_id,
+        )
         logger.info(
             "bigquery write completed",
             extra={
@@ -139,3 +141,46 @@ class BigQueryAnalyticsWriter:
                 "duration_ms": round((time.perf_counter() - start) * 1000, 1),
             },
         )
+
+    def _run(
+        self,
+        script: str,
+        parameters: list[tuple[str, str | None]],
+        *,
+        operation: str,
+        document_id: str,
+    ) -> None:
+        from google.api_core import exceptions as gexc
+        from google.cloud import bigquery
+
+        config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter(name, "STRING", value) for name, value in parameters
+            ],
+            labels={"app": "receipt-extractor", "operation": operation},
+        )
+        try:
+            job = self._client.query(script, job_config=config, location=self._location)
+            job.result(timeout=120)
+        except (gexc.BadRequest, gexc.NotFound, gexc.Forbidden) as exc:
+            # Concurrent transactions on the same table are reported as 400 "aborted due to
+            # concurrent update"; those are worth retrying. Schema/permission errors are not.
+            message = str(getattr(exc, "message", exc))
+            retryable = "concurrent" in message.lower() or "aborted" in message.lower()
+            logger.error(
+                "bigquery job failed",
+                extra={"document_id": document_id, "retryable": retryable,
+                       "operation": operation, "error_type": type(exc).__name__},
+            )  # fmt: skip
+            raise AnalyticsWriteError(
+                f"BigQuery {operation} failed: {type(exc).__name__}", retryable=retryable
+            ) from exc
+        except (gexc.GoogleAPIError, TimeoutError, OSError) as exc:
+            logger.error(
+                "bigquery job failed",
+                extra={"document_id": document_id, "retryable": True,
+                       "operation": operation, "error_type": type(exc).__name__},
+            )  # fmt: skip
+            raise AnalyticsWriteError(
+                f"BigQuery {operation} failed: {type(exc).__name__}", retryable=True
+            ) from exc

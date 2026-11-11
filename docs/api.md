@@ -18,6 +18,7 @@ taken **only** from the verified token. A document that belongs to someone else 
 | GET | `/documents/{id}/status` | Status, attempts, error (cheap to poll) | 300/min |
 | GET | `/documents/{id}/extraction` | Original Gemini output plus model metadata (404 until extracted) | 300/min |
 | GET | `/documents/{id}/file` | Short-lived signed URL to view the original file | 300/min |
+| DELETE | `/documents/{id}` | Permanently delete the document, every stored version of its file and its analytics rows (204). 409 while its upload link is valid or it is being processed ([security.md](security.md#retention-and-deletion)) | 60/min |
 | GET | `/review` | Your review queue (REVIEW_REQUIRED), paginated | 300/min |
 | GET | `/review/{id}` | Original vs. current values, validation, failed fields, corrections, `can_approve` | 300/min |
 | PATCH | `/review/{id}` | Save corrections `{"fields": {...}, "acknowledge_duplicate": false}`; revalidates; never approves | 60/min |

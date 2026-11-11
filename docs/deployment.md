@@ -4,7 +4,7 @@ Three workflows in [`.github/workflows`](../.github/workflows):
 
 | Workflow | Runs on | Does |
 | --- | --- | --- |
-| `ci.yml` | every pull request (and called by both deploy workflows) | backend lint/format/types/tests, frontend lint/format/types/tests/build, `pip-audit` + `npm audit`, `terraform fmt`/`validate`, Docker builds of all three images. No cloud credentials. |
+| `ci.yml` | every pull request (and called by both deploy workflows) | backend lint/format/types/tests, frontend lint/format/types/tests/build, `pip-audit` + `npm audit`, gitleaks secret scan of the full history, `terraform fmt`/`validate`, Docker builds of all three images. No cloud credentials. |
 | `deploy-dev.yml` | push to `main` (or run manually) | CI → build and push `api`, `worker`, `frontend` images tagged with the commit (`abc1234`) → `gcloud run deploy` each → smoke test |
 | `deploy-prod.yml` | push of a version tag `vX.Y.Z` | CI → one job in the protected `production` environment: `terraform plan` + `apply`, build and push images tagged `vX.Y.Z`, deploy, smoke test |
 
@@ -14,7 +14,8 @@ GitHub Actions signs in to Google Cloud with **Workload Identity Federation**: G
 short-lived OIDC token, Google exchanges it for a short-lived access token. No service account key
 exists anywhere.
 
-- The pool's provider only accepts tokens from this repository.
+- The pool's provider only accepts tokens from this repository, owned by this account's numeric
+  GitHub ID (`github_owner_id`), so a re-registered account or repository name can't use it.
 - The CI accounts can only be used by jobs running in one **GitHub environment**: `dev` for the dev
   project, `production` for prod. The environment's deployment rules (branch `main` for dev, version
   tags and required reviewers for production) therefore decide who can deploy.

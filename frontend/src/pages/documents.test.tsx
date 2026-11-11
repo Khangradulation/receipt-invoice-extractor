@@ -121,6 +121,57 @@ describe('document details', () => {
   });
 });
 
+describe('deleting a document', () => {
+  function setup() {
+    vi.spyOn(api, 'document').mockResolvedValue(detail());
+    vi.spyOn(api, 'documentFile').mockResolvedValue({
+      url: 'u',
+      expires_at: '',
+      content_type: 'application/pdf',
+    });
+    vi.spyOn(api, 'documents').mockResolvedValue({ items: [], next_cursor: null });
+  }
+
+  it('asks for confirmation, deletes and returns to the list', async () => {
+    setup();
+    const del = vi.spyOn(api, 'deleteDocument').mockResolvedValue(null);
+    renderApp('/documents/doc1');
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete document' });
+    expect(dialog).toHaveTextContent('permanently deleted');
+    expect(del).not.toHaveBeenCalled();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete permanently' }));
+    expect(del).toHaveBeenCalledWith('doc1');
+    expect(await screen.findByText('No documents yet')).toBeInTheDocument();
+  });
+
+  it('can be cancelled', async () => {
+    setup();
+    const del = vi.spyOn(api, 'deleteDocument').mockResolvedValue(null);
+    renderApp('/documents/doc1');
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(del).not.toHaveBeenCalled();
+  });
+
+  it('explains why a delete was refused', async () => {
+    setup();
+    vi.spyOn(api, 'deleteDocument').mockRejectedValue(
+      new ApiError(
+        409,
+        'conflict',
+        'This document is being processed. Try again in a few minutes.',
+      ),
+    );
+    renderApp('/documents/doc1');
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
+    expect(await screen.findByText(/being processed/)).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+});
+
 describe('review audit on document details', () => {
   it('shows who approved it, when, and the corrections made', async () => {
     vi.spyOn(api, 'document').mockResolvedValue(

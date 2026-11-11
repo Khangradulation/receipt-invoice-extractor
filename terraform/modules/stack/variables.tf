@@ -27,6 +27,11 @@ variable "github_repository" {
   description = "owner/name allowed to deploy via Workload Identity Federation"
   type        = string
 }
+variable "github_owner_id" {
+  description = "Numeric GitHub ID of the repository owner; pins WIF to that account even if the name is reused"
+  type        = string
+  default     = null
+}
 variable "developer_members" {
   description = "Developers who may sign URLs as the API service account when running locally (e.g. user:you@example.com)"
   type        = list(string)

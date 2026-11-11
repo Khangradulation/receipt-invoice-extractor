@@ -39,13 +39,24 @@ class FakeStorage:
     def upload_url(self, object_name: str, *, content_type: str, size_bytes: int) -> SignedUrl:
         return SignedUrl(url=f"https://x/{object_name}", method="PUT", expires_at=T0, headers={})
 
+    def __init__(self) -> None:
+        self.deleted: list[str] = []
+        self.fail_delete = False
+
     def download_url(self, object_name: str, *, filename: str | None = None) -> SignedUrl:
         return SignedUrl(url=f"https://x/{object_name}?get", method="GET", expires_at=T0)
+
+    def delete_all_versions(self, object_name: str) -> int:
+        if self.fail_delete:
+            raise RuntimeError("storage down")
+        self.deleted.append(object_name)
+        return 2
 
 
 class RecordingWriter:
     def __init__(self) -> None:
         self.rows: list[AnalyticsRows] = []
+        self.deleted: list[str] = []
         self.fail = False
 
     def write(self, rows: AnalyticsRows) -> None:
@@ -54,6 +65,13 @@ class RecordingWriter:
 
             raise AnalyticsWriteError("down", retryable=True)
         self.rows.append(rows)
+
+    def delete(self, document_id: str) -> None:
+        if self.fail:
+            from receipt_shared.analytics import AnalyticsWriteError
+
+            raise AnalyticsWriteError("down", retryable=True)
+        self.deleted.append(document_id)
 
 
 class FakeQueries:
@@ -101,7 +119,9 @@ class Env:
         self.writer = RecordingWriter()
         self.queries = FakeQueries()
         self.app.state.token_verifier = Verifier()
-        self.app.state.storage = FakeStorage()
+        self.storage = FakeStorage()
+        self.app.state.storage = self.storage
+        self.app.state.analytics_writer = self.writer
         self.app.state.repository = self.repo
         self.app.state.analytics = self.queries
         self.app.state.review_service = ReviewService(

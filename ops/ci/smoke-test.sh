@@ -2,14 +2,17 @@
 # Smoke-test a deployed environment. Read-only: no uploads, no Gemini calls, no cost beyond a few
 # requests. Exits non-zero on the first failure.
 #
-#   PROJECT_ID=... [REGION=us-central1] [EXPECT_TAG=abc1234] ./ops/ci/smoke-test.sh
+#   PROJECT_ID=... [REGION=us-central1] [EXPECT_TAG=abc1234] [PROJECT_NUMBER=...] ./ops/ci/smoke-test.sh
 #
 # EXPECT_TAG, when set, also checks that every service is serving an image with that tag.
+# PROJECT_NUMBER, when set, tests the deterministic URLs (https://SERVICE-NUMBER.REGION.run.app),
+# which are the ones allowed by CORS and Firebase sign-in.
 set -euo pipefail
 
 : "${PROJECT_ID:?set PROJECT_ID}"
 REGION="${REGION:-us-central1}"
 EXPECT_TAG="${EXPECT_TAG:-}"
+PROJECT_NUMBER="${PROJECT_NUMBER:-}"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 pass() { echo "ok:   $*"; }
@@ -32,8 +35,13 @@ for svc in receipt-api receipt-worker receipt-frontend; do
   pass "$svc ready ($latest)"
 done
 
-API_URL="$(describe receipt-api status.url)"
-WEB_URL="$(describe receipt-frontend status.url)"
+if [[ -n "$PROJECT_NUMBER" ]]; then
+  API_URL="https://receipt-api-${PROJECT_NUMBER}.${REGION}.run.app"
+  WEB_URL="https://receipt-frontend-${PROJECT_NUMBER}.${REGION}.run.app"
+else
+  API_URL="$(describe receipt-api status.url)"
+  WEB_URL="$(describe receipt-frontend status.url)"
+fi
 
 # 2) API: health is public and reports this environment; data endpoints require sign-in.
 health="$(curl -fsS --max-time 30 "${API_URL}/api/v1/health")" || fail "API health request failed"
