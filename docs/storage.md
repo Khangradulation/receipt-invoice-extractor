@@ -87,15 +87,15 @@ versioning, lifecycle, CORS and labels), the Firestore `(default)` database (Nat
 into Terraform.
 
 ```bash
-PROJECT_ID=receipt-extractor-lkmljr DEVELOPER_EMAIL=you@example.com ./ops/gcp/bootstrap-storage.sh
+PROJECT_ID=my-project DEVELOPER_EMAIL=you@example.com ./ops/gcp/bootstrap-storage.sh
 ```
 
 `DEVELOPER_EMAIL` grants your user Token Creator on the API service account, so the API can sign
 URLs when run locally. Then set in `.env`:
 
 ```
-GCS_UPLOAD_BUCKET=receipt-extractor-lkmljr-documents
-SIGNING_SERVICE_ACCOUNT=receipt-api@receipt-extractor-lkmljr.iam.gserviceaccount.com
+GCS_UPLOAD_BUCKET=my-project-documents
+SIGNING_SERVICE_ACCOUNT=receipt-api@my-project.iam.gserviceaccount.com
 ```
 
 ## Tests

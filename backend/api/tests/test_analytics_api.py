@@ -87,3 +87,24 @@ def test_token_bucket_refills() -> None:
     assert limiter.acquire("u") > 0
     now[0] += 1.0
     assert limiter.acquire("u") == 0
+
+
+def test_time_zone_is_passed_to_every_query(env: Env) -> None:
+    resp = env.get(
+        "/analytics/overview",
+        params={
+            "start_date": "2026-01-01",
+            "end_date": "2026-11-11",
+            "time_zone": "America/Halifax",
+        },
+    )
+    assert resp.status_code == 200
+    assert {c["time_zone"] for c in env.queries.calls} == {"America/Halifax"}
+
+
+def test_time_zone_defaults_to_utc_and_rejects_unknown_zones(env: Env) -> None:
+    assert env.get("/analytics/categories").status_code == 200
+    assert env.queries.calls[-1]["time_zone"] == "UTC"
+    for bad in ("Mars/Olympus", "../../etc/passwd", "x" * 65):
+        resp = env.get("/analytics/categories", params={"time_zone": bad})
+        assert resp.status_code in (400, 422), bad

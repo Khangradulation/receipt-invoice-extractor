@@ -30,7 +30,11 @@ taken **only** from the verified token. A document that belongs to someone else 
 | GET | `/analytics/merchants` | Top merchants (`?limit=1–50`) | 60/min |
 
 Analytics take `?start_date=&end_date=` (ISO dates; default is the last 365 days; at most 5
-years). Results are cached for 60 s per user and instance.
+years) and `?time_zone=` (an IANA name such as `America/Toronto`, default `UTC`; unknown zones give 400).
+Spending is filtered by the date printed on the document. Upload and review counts (success rate,
+review rate, receipts vs. invoices) are filtered by the day of upload or review **in that time
+zone**, so an evening upload counts on the day the user saw it. The web app sends the browser's
+zone. Results are cached for 60 s per user and instance.
 
 ## Pagination
 

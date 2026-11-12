@@ -64,7 +64,7 @@ Development, tests and the benchmark use synthetic documents only (`evaluation/s
 - **Email verification and MFA** are not required for sign-in.
 - **Encryption** uses Google-managed keys (encrypted at rest by default); customer-managed keys
   (CMEK) are not configured.
-- **Legacy Cloud Run URLs** (`...-z5wqv4rxrq-uc.a.run.app`) also reach the services; they are not
+- **Legacy Cloud Run URLs** (`...-<hash>-uc.a.run.app`) also reach the services; they are not
   allowed for sign-in or uploads, so only the `...-PROJECT_NUMBER.REGION.run.app` URLs work.
 - **Container image vulnerability scanning** (Artifact Analysis) is not enabled because it is billed
   per image; dependencies are audited in CI instead.

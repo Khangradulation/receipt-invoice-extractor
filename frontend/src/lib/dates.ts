@@ -11,3 +11,12 @@ export function defaultRange(): { start_date: string; end_date: string } {
   start.setFullYear(end.getFullYear() - 1);
   return { start_date: isoDate(start), end_date: isoDate(end) };
 }
+
+/** The browser's IANA time zone, so "today" and upload days match what the user sees. */
+export function browserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}

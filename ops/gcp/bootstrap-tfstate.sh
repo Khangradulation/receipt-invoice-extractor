@@ -3,7 +3,7 @@
 # Private, versioned (state history can be restored), uniform access, public access blocked.
 # The GCS backend locks state with a lock object, so concurrent runs cannot corrupt it.
 #
-#   PROJECT_ID=receipt-extractor-lkmljr ./ops/gcp/bootstrap-tfstate.sh
+#   PROJECT_ID=my-project ./ops/gcp/bootstrap-tfstate.sh
 set -euo pipefail
 : "${PROJECT_ID:?set PROJECT_ID}"
 REGION="${REGION:-us-central1}"

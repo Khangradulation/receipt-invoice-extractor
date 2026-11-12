@@ -72,8 +72,8 @@ duplicate fingerprint fields, and `history`.
 | Artifact Registry `receipt-extractor` | Docker, us-central1; keeps 10 recent images, deletes untagged images after 7 days |
 
 ```bash
-PROJECT_ID=receipt-extractor-lkmljr ./ops/gcp/bootstrap-worker.sh   # once, idempotent
-PROJECT_ID=receipt-extractor-lkmljr ./ops/gcp/deploy-worker.sh      # build + deploy (billable)
+PROJECT_ID=my-project ./ops/gcp/bootstrap-worker.sh   # once, idempotent
+PROJECT_ID=my-project ./ops/gcp/deploy-worker.sh      # build + deploy (billable)
 make test-pipeline-live                                             # end-to-end (billable)
 ```
 

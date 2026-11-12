@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, apiRequest, setTokenProvider } from './api';
+import { api, ApiError, apiRequest, setTokenProvider } from './api';
 
 const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 
@@ -66,5 +66,17 @@ describe('apiRequest', () => {
     setTokenProvider(async () => null);
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
     await expect(apiRequest('/x')).rejects.toMatchObject({ code: 'network_error', status: 0 });
+  });
+
+  it('sends the browser time zone with analytics requests', async () => {
+    setTokenProvider(async () => null);
+    vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
+      timeZone: 'America/Halifax',
+    } as Intl.ResolvedDateTimeFormatOptions);
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(ok({ rows: [] }));
+    await api.merchants({ start_date: '2026-01-01', end_date: '2026-11-11' }, 5);
+    expect(spy.mock.calls[0]?.[0]).toBe(
+      '/api/v1/analytics/merchants?start_date=2026-01-01&end_date=2026-11-11&time_zone=America%2FHalifax&limit=5',
+    );
   });
 });

@@ -66,6 +66,7 @@ class AnalyticsQueries:
         end_date: date,
         user_id: str | None = None,
         limit: int = 10,
+        time_zone: str = "UTC",
     ) -> list[dict[str, Any]]:
         from google.cloud import bigquery
 
@@ -75,6 +76,8 @@ class AnalyticsQueries:
             "start_date": bigquery.ScalarQueryParameter("start_date", "DATE", start_date),
             "end_date": bigquery.ScalarQueryParameter("end_date", "DATE", end_date),
             "limit": bigquery.ScalarQueryParameter("limit", "INT64", limit),
+            # Day boundaries for timestamp columns (uploads, reviews) in the user's time zone.
+            "time_zone": bigquery.ScalarQueryParameter("time_zone", "STRING", time_zone),
         }
         if user_id is not None:
             available["user_id"] = bigquery.ScalarQueryParameter("user_id", "STRING", user_id)

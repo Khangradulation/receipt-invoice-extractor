@@ -6,8 +6,9 @@ import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, date, datetime, timedelta
-from typing import Annotated, Any
+from datetime import date, datetime, timedelta
+from typing import Annotated, Any, NamedTuple
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -51,13 +52,33 @@ class _TTLCache:
 CACHE = _TTLCache(CACHE_TTL_SECONDS)
 
 
+class DateRange(NamedTuple):
+    """Inclusive days, counted in ``time_zone`` (an IANA name)."""
+
+    start: date
+    end: date
+    time_zone: str
+
+
 def date_range(
     start_date: Annotated[
         date | None, Query(description="Default: one year before end_date")
     ] = None,
-    end_date: Annotated[date | None, Query(description="Default: today (UTC)")] = None,
-) -> tuple[date, date]:
-    end = end_date or datetime.now(UTC).date()
+    end_date: Annotated[date | None, Query(description="Default: today in time_zone")] = None,
+    time_zone: Annotated[
+        str,
+        Query(
+            max_length=64,
+            description="IANA time zone (e.g. America/Toronto) that defines the days of upload "
+            "and review timestamps. Default UTC.",
+        ),
+    ] = "UTC",
+) -> DateRange:
+    try:
+        zone = ZoneInfo(time_zone)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown time_zone.") from exc
+    end = end_date or datetime.now(zone).date()
     start = start_date or end - timedelta(days=365)
     if start > end:
         raise HTTPException(
@@ -65,20 +86,25 @@ def date_range(
         )
     if (end - start).days > MAX_RANGE_DAYS:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Date range may not exceed 5 years.")
-    return start, end
+    return DateRange(start, end, time_zone)
 
 
-Range = Annotated[tuple[date, date], Depends(date_range)]
+Range = Annotated[DateRange, Depends(date_range)]
 
 
 def _run(
-    queries: AnalyticsQueries, name: str, user: CurrentUser, rng: tuple[date, date], limit: int = 10
+    queries: AnalyticsQueries, name: str, user: CurrentUser, rng: DateRange, limit: int = 10
 ) -> list[dict[str, Any]]:
-    key = (user.uid, name, rng[0], rng[1], limit)
+    key = (user.uid, name, rng[0], rng[1], rng[2], limit)
     return CACHE.get_or_run(
         key,
         lambda: queries.run(
-            name, user_id=user.uid, start_date=rng[0], end_date=rng[1], limit=limit
+            name,
+            user_id=user.uid,
+            start_date=rng[0],
+            end_date=rng[1],
+            limit=limit,
+            time_zone=rng[2],
         ),
     )
 

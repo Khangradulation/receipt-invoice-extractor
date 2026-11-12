@@ -2,7 +2,7 @@
 # Phase 5 bootstrap: worker/Eventarc/build service accounts, Artifact Registry, permissions.
 # Idempotent. Run after bootstrap-storage.sh. Phase 11 moves this into Terraform.
 #
-#   PROJECT_ID=receipt-extractor-lkmljr ./ops/gcp/bootstrap-worker.sh
+#   PROJECT_ID=my-project ./ops/gcp/bootstrap-worker.sh
 set -euo pipefail
 
 : "${PROJECT_ID:?set PROJECT_ID}"

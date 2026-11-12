@@ -1,6 +1,6 @@
 -- Production accuracy signal: how often reviewers had to correct Gemini, per model version.
 -- field_correction_rate = corrected fields / (reviewed documents x 13 extractable fields).
--- Params: @user_id STRING, @start_date DATE, @end_date DATE (on review date)
+-- Params: @user_id STRING, @start_date DATE, @end_date DATE, @time_zone STRING (IANA, for the day boundaries) (on review date)
 WITH reviewed AS (
   SELECT
     model_version,
@@ -8,7 +8,7 @@ WITH reviewed AS (
     COUNTIF(action = 'CORRECTION') AS corrections
   FROM `{{dataset}}.review_records`
   WHERE user_id = @user_id
-    AND DATE(reviewed_at) BETWEEN @start_date AND @end_date
+    AND DATE(reviewed_at, @time_zone) BETWEEN @start_date AND @end_date
   GROUP BY model_version, document_id
 )
 SELECT

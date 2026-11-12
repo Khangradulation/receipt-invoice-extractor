@@ -1,6 +1,6 @@
 -- Share of successfully extracted documents that needed human review (first validation).
 -- Duplicates and failures are excluded from the denominator.
--- Params: @user_id STRING, @start_date DATE, @end_date DATE (on upload date)
+-- Params: @user_id STRING, @start_date DATE, @end_date DATE, @time_zone STRING (IANA, for the day boundaries) (on upload date)
 SELECT
   COUNTIF(processing_status NOT IN ('FAILED', 'DUPLICATE')) AS extracted_documents,
   COUNTIF(review_required) AS review_required,
@@ -13,4 +13,4 @@ SELECT
   ) AS review_rate
 FROM `{{dataset}}.documents`
 WHERE user_id = @user_id
-  AND DATE(created_at) BETWEEN @start_date AND @end_date;
+  AND DATE(created_at, @time_zone) BETWEEN @start_date AND @end_date;

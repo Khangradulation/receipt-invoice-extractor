@@ -42,6 +42,8 @@ best effort. Concurrent-transaction aborts are classified as retryable.
 Packaged in `backend/shared/src/receipt_shared/analytics/sql/` (so the API image ships them) and
 run through `AnalyticsQueries.run(name, user_id=..., start_date=..., end_date=...)`. Every per-user
 query filters on `@user_id`. Totals are grouped **by currency**, with no currency conversion.
+Spending queries filter on `document_date`; upload and review counts filter on
+`DATE(created_at, @time_zone)` / `DATE(reviewed_at, @time_zone)`, so days follow the user's time zone.
 
 | Query | Answers |
 |-------|---------|
@@ -69,7 +71,7 @@ which are equivalent and dataset-scoped.
 ## Setup and tests
 
 ```bash
-PROJECT_ID=receipt-extractor-lkmljr ./ops/gcp/bootstrap-bigquery.sh   # dataset, tables, access
+PROJECT_ID=my-project ./ops/gcp/bootstrap-bigquery.sh   # dataset, tables, access
 make test-bigquery-live      # idempotency + approved-only + every query, on real BigQuery
 make test-pipeline-live      # upload → worker → Firestore + BigQuery
 ```
