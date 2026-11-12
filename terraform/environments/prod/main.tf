@@ -21,4 +21,5 @@ module "stack" {
   gemini_location        = var.gemini_location
   supported_currencies   = var.supported_currencies
   notification_channels  = var.notification_channels
+  alert_emails           = var.alert_emails
 }

@@ -18,7 +18,7 @@ terraform/
     github_wif/            keyless GitHub Actions auth + CI deployer service account
     budget_guard/          monthly budget -> Pub/Sub, kill-switch account and permissions
     identity/              Firebase Auth (email/password, authorised domains)
-    monitoring/            log-based metrics + alert policies
+    monitoring/            log-based metrics, alert policies, email channel, dashboard
   environments/
     dev/                   dev project; imports.tf adopts resources created by ops/gcp/*.sh
     prod/                  separate project; bootstrap once by hand, then only via deploy-prod

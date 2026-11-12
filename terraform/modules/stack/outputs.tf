@@ -7,3 +7,4 @@ output "github_wif_provider" { value = module.github_wif.provider_name }
 output "ci_deployer_email" { value = module.github_wif.deployer_email }
 output "bigquery_tables" { value = module.bigquery.tables }
 output "ci_terraform_email" { value = module.github_wif.terraform_runner_email }
+output "monitoring_dashboard" { value = module.monitoring.dashboard_id }

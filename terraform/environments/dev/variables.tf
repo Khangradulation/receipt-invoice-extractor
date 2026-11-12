@@ -79,3 +79,8 @@ variable "notification_channels" {
   type        = list(string)
   default     = []
 }
+variable "alert_emails" {
+  description = "Email addresses that receive monitoring alerts"
+  type        = list(string)
+  default     = []
+}

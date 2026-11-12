@@ -241,4 +241,5 @@ module "monitoring" {
   source                = "../monitoring"
   project_id            = var.project_id
   notification_channels = var.notification_channels
+  alert_emails          = var.alert_emails
 }
