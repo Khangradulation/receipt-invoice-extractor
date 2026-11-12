@@ -73,8 +73,8 @@ def test_qualified_dataset_rejects_bad_identifiers(bad: str) -> None:
 
 
 def test_qualified_dataset_ok() -> None:
-    assert qualified_dataset("receipt-extractor-lkmljr", "receipt_analytics") == (
-        "receipt-extractor-lkmljr.receipt_analytics"
+    assert qualified_dataset("my-project-123", "receipt_analytics") == (
+        "my-project-123.receipt_analytics"
     )
 
 

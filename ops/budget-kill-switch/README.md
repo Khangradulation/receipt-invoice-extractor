@@ -20,12 +20,12 @@ flowchart LR
 - **Credits are excluded** from the budget, so it measures real usage even while free-trial
   credits pay for it.
 - To recover, re-link the billing account:
-  Console → Billing → *My projects* → `receipt-extractor-lkmljr` → *Change billing*. Google warns
+  Console → Billing → *My projects* → your project → *Change billing*. Google warns
   that projects left without billing for a long time may have resources deleted.
 
 | Env var | Value | Meaning |
 |---------|-------|---------|
-| `TARGET_PROJECT_ID` | `receipt-extractor-lkmljr` | Project whose billing is detached |
+| `TARGET_PROJECT_ID` | your project ID | Project whose billing is detached |
 | `DRY_RUN` | `false` | `true` only logs "would disable billing" |
 | `KILL_RATIO` | `1.0` | Fraction of the budget that triggers the stop |
 
@@ -45,7 +45,7 @@ authentication.
 ## Deploy / update
 
 ```bash
-P=receipt-extractor-lkmljr
+P=my-project   # your project ID
 cd ops/budget-kill-switch
 gcloud functions deploy budget-kill-switch --gen2 --project $P --region us-central1 \
   --runtime python312 --source . --entry-point on_budget_notification \
@@ -56,7 +56,8 @@ gcloud functions deploy budget-kill-switch --gen2 --project $P --region us-centr
   --memory 256Mi --max-instances 1
 ```
 
-Phase 11 moves this into Terraform.
+Terraform (`modules/budget_guard`) manages the budget, topic, service account and permissions;
+the function's code is deployed with this command.
 
 ## Testing
 
@@ -70,10 +71,10 @@ Safe end-to-end check. Use an amount **below** the budget unless the function is
 mode, otherwise billing is really detached:
 
 ```bash
-gcloud pubsub topics publish budget-alerts --project receipt-extractor-lkmljr \
+gcloud pubsub topics publish budget-alerts --project $P \
   --message='{"costAmount":3.0,"budgetAmount":10.0,"currencyCode":"USD"}'
 gcloud logging read 'resource.labels.service_name="budget-kill-switch"' \
-  --project receipt-extractor-lkmljr --freshness=10m --limit 5
+  --project $P --freshness=10m --limit 5
 ```
 
 Verified on 2026-11-09:

@@ -2,7 +2,7 @@
 # Phase 6 bootstrap: BigQuery dataset, tables (from sql/schema) and dataset-scoped IAM.
 # Idempotent (CREATE ... IF NOT EXISTS). Phase 11 moves this into Terraform.
 #
-#   PROJECT_ID=receipt-extractor-lkmljr ./ops/gcp/bootstrap-bigquery.sh
+#   PROJECT_ID=my-project ./ops/gcp/bootstrap-bigquery.sh
 set -euo pipefail
 
 : "${PROJECT_ID:?set PROJECT_ID}"

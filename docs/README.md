@@ -1,8 +1,10 @@
 # Documentation
 
-Architecture, setup, deployment, security and evaluation docs. Each phase adds to these; Phase 16 completes them.
+Start with the [README](../README.md), then [architecture.md](architecture.md).
 
-- [setup.md](setup.md) — local development setup
+- [architecture.md](architecture.md) — components, upload sequence, document lifecycle, reliability, data stores
+- [setup.md](setup.md) — local development, and a new Google Cloud environment from scratch
+- [screenshots](screenshots/README.md) — the real app with synthetic documents
 - [extraction.md](extraction.md) — Gemini extraction engine
 - [../ops/budget-kill-switch/README.md](../ops/budget-kill-switch/README.md) — $10 budget hard stop
 - [validation.md](validation.md) — validation engine and outcomes

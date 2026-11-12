@@ -2,7 +2,7 @@
 # Composite indexes for document listing (Phase 7): newest-first per user, optionally by status.
 # Idempotent: existing indexes are skipped. Index builds take a few minutes.
 #
-#   PROJECT_ID=receipt-extractor-lkmljr ./ops/gcp/bootstrap-firestore-indexes.sh
+#   PROJECT_ID=my-project ./ops/gcp/bootstrap-firestore-indexes.sh
 set -euo pipefail
 : "${PROJECT_ID:?set PROJECT_ID}"
 COLLECTION="${COLLECTION:-documents}"

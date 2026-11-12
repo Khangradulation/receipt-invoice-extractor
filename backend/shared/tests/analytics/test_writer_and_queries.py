@@ -152,9 +152,20 @@ def test_every_query_loads_with_known_parameters(name: str) -> None:
     assert "{{dataset}}" not in sql
     assert "`proj-1.receipt_analytics." in sql
     params = query_parameters(sql)
-    assert params <= {"user_id", "start_date", "end_date", "limit"}
+    assert params <= {"user_id", "start_date", "end_date", "limit", "time_zone"}
     if name != "extraction_accuracy_evaluation":
         assert "user_id" in params  # per-user data is always filtered by user
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["document_type_counts", "processing_success_rate", "manual_review_rate",
+     "extraction_accuracy_reviews"],
+)  # fmt: skip
+def test_timestamp_filters_use_the_callers_time_zone(name: str) -> None:
+    # Uploads late in the evening in the Americas are already "tomorrow" in UTC.
+    sql = load_query(name, "proj-1.receipt_analytics")
+    assert ", @time_zone) BETWEEN @start_date AND @end_date" in sql
 
 
 def test_unknown_query_rejected() -> None:

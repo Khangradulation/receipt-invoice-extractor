@@ -2,7 +2,7 @@
 # Build the worker image with Cloud Build, deploy it to Cloud Run, and ensure the Eventarc
 # trigger. Billable (Cloud Build minutes, Cloud Run, Artifact Registry storage).
 #
-#   PROJECT_ID=receipt-extractor-lkmljr ./ops/gcp/deploy-worker.sh
+#   PROJECT_ID=my-project ./ops/gcp/deploy-worker.sh
 set -euo pipefail
 
 : "${PROJECT_ID:?set PROJECT_ID}"

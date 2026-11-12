@@ -2,7 +2,7 @@
 # Phase 4 bootstrap: private document bucket, Firestore, and the API service account.
 # Idempotent: safe to re-run. Phase 11 moves these resources into Terraform.
 #
-#   PROJECT_ID=receipt-extractor-lkmljr ./ops/gcp/bootstrap-storage.sh
+#   PROJECT_ID=my-project ./ops/gcp/bootstrap-storage.sh
 set -euo pipefail
 
 : "${PROJECT_ID:?set PROJECT_ID}"

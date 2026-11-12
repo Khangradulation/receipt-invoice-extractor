@@ -45,7 +45,8 @@ comes from the backend verifying ID tokens and checking document ownership.
 3. Initialise Auth (`identityPlatform:initializeAuth`), enable the email/password provider, and add
    `localhost` (plus the deployed frontend domain later) to the authorised domains.
 
-These calls are scripted in Phase 11 (Terraform). The live project was configured on 2026-11-10.
+Steps 1–3 are commands in [setup.md](setup.md#4-firebase-authentication). Terraform then manages the
+email/password provider and the authorised domains (`terraform/modules/identity`).
 
 ## Tests
 

@@ -1,3 +1,4 @@
+import { browserTimeZone } from './dates';
 import { config } from './config';
 import type {
   AnalyticsOverview,
@@ -133,6 +134,9 @@ export interface DateRange {
   end_date?: string;
 }
 
+/** Analytics days (uploads, reviews) are counted in the user's own time zone. */
+const inZone = (range: DateRange) => ({ ...range, time_zone: browserTimeZone() });
+
 export const api = {
   health: () => apiRequest<HealthResponse>('/api/v1/health', { auth: false }),
 
@@ -174,11 +178,13 @@ export const api = {
     }),
 
   overview: (range: DateRange) =>
-    apiRequest<AnalyticsOverview>('/api/v1/analytics/overview', { query: { ...range } }),
+    apiRequest<AnalyticsOverview>('/api/v1/analytics/overview', { query: inZone(range) }),
   monthlySpending: (range: DateRange) =>
-    apiRequest<AnalyticsRows>('/api/v1/analytics/monthly-spending', { query: { ...range } }),
+    apiRequest<AnalyticsRows>('/api/v1/analytics/monthly-spending', { query: inZone(range) }),
   categories: (range: DateRange) =>
-    apiRequest<AnalyticsRows>('/api/v1/analytics/categories', { query: { ...range } }),
+    apiRequest<AnalyticsRows>('/api/v1/analytics/categories', { query: inZone(range) }),
   merchants: (range: DateRange, limit = 10) =>
-    apiRequest<AnalyticsRows>('/api/v1/analytics/merchants', { query: { ...range, limit } }),
+    apiRequest<AnalyticsRows>('/api/v1/analytics/merchants', {
+      query: { ...inZone(range), limit },
+    }),
 };

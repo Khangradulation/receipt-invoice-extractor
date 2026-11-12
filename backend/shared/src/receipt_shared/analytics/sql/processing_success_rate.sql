@@ -1,5 +1,5 @@
 -- Share of uploaded documents that were processed without a processing failure.
--- Params: @user_id STRING, @start_date DATE, @end_date DATE (on upload date)
+-- Params: @user_id STRING, @start_date DATE, @end_date DATE, @time_zone STRING (IANA, for the day boundaries) (on upload date)
 SELECT
   COUNT(*) AS processed_documents,
   COUNTIF(processing_status != 'FAILED') AS succeeded,
@@ -10,4 +10,4 @@ SELECT
   APPROX_QUANTILES(processing_duration_ms, 100)[SAFE_OFFSET(95)] AS p95_processing_ms
 FROM `{{dataset}}.documents`
 WHERE user_id = @user_id
-  AND DATE(created_at) BETWEEN @start_date AND @end_date;
+  AND DATE(created_at, @time_zone) BETWEEN @start_date AND @end_date;

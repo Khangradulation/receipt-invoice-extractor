@@ -199,10 +199,14 @@ def env() -> Env:
     return Env()
 
 
+_ORIGINAL_CAPACITY = {name: int(limiter.capacity) for name, limiter in LIMITERS.items()}
+
+
 @pytest.fixture(autouse=True)
 def _fresh_rate_limits() -> None:
-    for name, limiter in list(LIMITERS.items()):
-        LIMITERS[name] = TokenBucketLimiter(int(limiter.capacity))
+    # Restore the original capacities: a test may have swapped in a smaller limiter.
+    for name, capacity in _ORIGINAL_CAPACITY.items():
+        LIMITERS[name] = TokenBucketLimiter(capacity)
     from receipt_api.routers import analytics
 
     analytics.CACHE._items.clear()

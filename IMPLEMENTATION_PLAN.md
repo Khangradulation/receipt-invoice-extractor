@@ -25,7 +25,33 @@ A phase is only marked done after its deliverable has been verified.
 | 13 | Security | Done — see Phase log |
 | 14 | Monitoring and observability | Done — see Phase log |
 | 15 | Testing (integration + E2E) | Done — see Phase log |
-| 16 | Documentation | Not started |
+| 16 | Documentation | Done — see Phase log and Definition of done |
+
+## Definition of done
+
+Checked against what was actually run (evidence in the phase logs).
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Users can register and authenticate | Met | Firebase email/password; the user's own sign-up; E2E and demo accounts (Phases 8, 15, 16) |
+| Upload PDF receipts / receipt images / invoices | Met | Live pipeline and E2E tests (PDF); demo upload of PNG and a 2-page invoice PDF; 60 invoices in the benchmark |
+| Documents stored in private Cloud Storage | Met | Public access prevention enforced (Phase 4, Terraform) |
+| Storage events trigger Eventarc, which invokes the Cloud Run worker | Met | `make test-pipeline-live`, `make test-e2e` against the deployed worker |
+| Gemini extracts structured information | Met | Benchmark: 150/150 documents, 100% field accuracy on prompt 2026-11-11.1 |
+| Extracted data is validated | Met | Validation engine (Phase 3), applied in the worker and on every correction |
+| Duplicate events don't create duplicate transactions | Met | Lease-based claim + idempotent MERGE; unit tests and live BigQuery idempotency test |
+| Invalid records enter the review queue; users can correct fields | Met | E2E: mismatch → REVIEW_REQUIRED → corrected → approved |
+| Approved records stored in BigQuery; line items linked | Met | E2E checks `extracted_transactions` and `review_records`; live BigQuery tests check line items |
+| Analytics dashboard shows actual BigQuery data | Met | Screenshots (Phase 16); time-zone bug in upload-day counts found and fixed in Phase 16 |
+| Extraction evaluation runs against labelled documents | Met | `make evaluate` (Phase 10) |
+| Terraform provisions the infrastructure | Met for dev | Applied to dev (Phases 11–14); prod validated only |
+| GitHub Actions runs CI successfully | Met | Every PR since Phase 12 |
+| Development deployment works | Met | `deploy-dev` on every merge, with smoke test |
+| Production deployment requires approval | **Not met** | `deploy-prod.yml` runs in a protected `production` environment, but no prod project or `production` environment exists yet, and required reviewers on a private repository need a paid GitHub plan |
+| Monitoring and logging configured | Met | 12 metrics, 6 alerts with email, dashboard (Phase 14) |
+| Security checks implemented | Met | Phase 13 controls; gitleaks, audits, authorization tests in CI |
+| README and setup documentation complete | Met | Phase 16. The from-scratch setup sequence is documented, but hasn't been re-run on a fresh project |
+| Automated tests pass | Met | `make check` and CI |
 
 ## Architecture decisions
 
@@ -176,7 +202,7 @@ A phase is only marked done after its deliverable has been verified.
 - Worker image built and imports the engine; the API image does not contain `google-genai`.
 
 **Live verification (2026-11-09)**
-- GCP project `receipt-extractor-lkmljr` created, with billing linked and Vertex AI enabled.
+- The dev GCP project was created, with billing linked and Vertex AI enabled.
 - `gemini-2.5-flash` returned 404 (no longer available to new projects). The available models
   were listed and probed: Gemini 3.x models return 404 in `us-central1` but work in the `global`
   location. Defaults changed to `GEMINI_MODEL=gemini-3.8-flash`, `GEMINI_LOCATION=global`.
@@ -245,7 +271,7 @@ A phase is only marked done after its deliverable has been verified.
 
 **Implemented** (details: [docs/storage.md](docs/storage.md))
 - GCP (via `ops/gcp/bootstrap-storage.sh`, idempotent): private bucket
-  `receipt-extractor-lkmljr-documents` (us-central1, public access prevention enforced, uniform
+  `<project>-documents` (us-central1, public access prevention enforced, uniform
   access, versioning, lifecycle, CORS, labels); Firestore `(default)` Native database in
   us-central1; `receipt-api` service account with bucket-scoped object create/view,
   `datastore.user`, and Token Creator on itself; the developer has Token Creator for local signing.
@@ -598,7 +624,7 @@ committed in `evaluation/reports/full-150-20261110/`):
 literal `${var.budget_amount}`, the worker would have lost startup CPU boost, and Cloud Run
 deletion protection would have been switched off.
 
-**Verified (dev, `receipt-extractor-lkmljr`)**
+**Verified (dev project)**
 - `terraform apply`: "Apply complete! Resources: 23 imported, 60 added, 11 changed, 0 destroyed."
 - Re-plan straight after: "No changes. Your infrastructure matches the configuration."
 - Worker still on revision `receipt-worker-00004-h96` (now labelled); Firestore delete protection
@@ -647,8 +673,8 @@ deletion protection would have been switched off.
   CI-deployed worker.
 
 **Not verified / limitations**
-- Cloud Run also serves each service at a legacy `...-z5wqv4rxrq-uc.a.run.app` URL, which is not in
-  CORS or Firebase's authorised domains; use the `...-411540938720.us-central1.run.app` URLs. The
+- Cloud Run also serves each service at a legacy `...-<hash>-uc.a.run.app` URL, which is not in
+  CORS or Firebase's authorised domains; use the `...-<project-number>.us-central1.run.app` URLs. The
   smoke test now tests those (Phase 13).
 - Prod: no prod project; `deploy-prod.yml` is linted and its Terraform validated only.
   Required reviewers on a private repository need a paid GitHub plan.
@@ -771,4 +797,41 @@ from earlier phases (see docs/testing.md for the mapping). Added:
   tests with a mocked API, and the backend flow by the deployed E2E test.
 - The E2E test isn't run by CI (it's billable and needs Firebase admin rights the CI account
   doesn't have). Run it manually after significant changes.
+
+### Phase 16 — Documentation (2026-11-11)
+
+**Built**
+- `README.md` rewritten to cover every section the spec lists, with a Mermaid architecture
+  diagram, runnable commands and real screenshots.
+- `docs/architecture.md`: components, the upload-to-approval sequence, the document state
+  machine, reliability, data stores, environments (four Mermaid diagrams).
+- `docs/setup.md` rewritten: local development, plus the consolidated from-scratch Google Cloud
+  path (project, state bucket, Firebase API calls, Terraform without `imports.tf`, kill switch,
+  `.env`, GitHub environment and variables, verification).
+- `docs/screenshots/`: five screenshots of the real app (synthetic documents processed by the dev
+  backend, a throwaway demo account deleted afterwards).
+- Definition-of-done table (above), with evidence and the one unmet item.
+- Project ID and number replaced with placeholders in docs and scripts; git history still contains
+  them.
+
+**Bug found while taking screenshots, fixed**
+- Analytics counted uploads and reviews by UTC day. An evening upload in the Americas fell outside
+  a range ending "today", so the dashboard showed 0 processed documents and no success or review
+  rate.
+- Fix: the API takes `time_zone` (IANA, validated; `tzdata` added), the four timestamp-based
+  queries use `DATE(ts, @time_zone)`, and the web app sends the browser's zone.
+- Verified against real dev data through a local API build: 5 processed, 100% success, 20% review,
+  4 receipts and 1 invoice (before: 0 processed).
+
+**Test isolation fix:** the rate-limit reset fixture copied a test's shrunken limiter capacity into
+later tests; it now restores the original capacities.
+
+**Verified**
+- All 10 Mermaid diagrams in the repository render (Mermaid 11.4.1).
+- Backend 443 tests, frontend 43 tests.
+
+**Not verified**
+- The from-scratch setup sequence hasn't been run on a fresh project.
+- Embedded PDF previews don't render in the screenshot browser (Chrome, Firefox and Safari do), so
+  the review screenshot shows an empty document panel.
 
