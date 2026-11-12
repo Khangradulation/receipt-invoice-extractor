@@ -3,7 +3,7 @@
 BACKEND := backend
 FRONTEND := frontend
 
-.PHONY: help install api worker web check test lint format backend-check frontend-check docker-build samples extract test-gemini-live test-storage-live test-pipeline-live test-bigquery-live test-api-live sql-schema dataset evaluate tf-fmt tf-validate tf-plan-dev audit smoke-test
+.PHONY: help install api worker web check test lint format backend-check frontend-check docker-build samples extract test-gemini-live test-storage-live test-pipeline-live test-bigquery-live test-api-live sql-schema dataset evaluate tf-fmt tf-validate tf-plan-dev audit smoke-test test-e2e coverage
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -23,7 +23,7 @@ web: ## Run the Vite dev server on :5173 (proxies /api to :8080)
 
 backend-check: ## Lint, format-check, type-check and test the backend
 	cd $(BACKEND) && uv run ruff check . ../evaluation ../ops && uv run ruff format --check . ../evaluation ../ops && \
-		uv run mypy shared/src api/src worker/src && uv run pytest && \
+		uv run mypy shared/src api/src worker/src && uv run pytest --cov --cov-report=term:skip-covered && \
 		uv run pytest -q ../ops/budget-kill-switch && \
 		uv run pytest -q -p no:cacheprovider ../evaluation/tests
 
@@ -66,6 +66,18 @@ test-bigquery-live: ## Live BigQuery idempotency + analytics queries (needs data
 
 test-api-live: samples ## Live API flow: upload, list, review, approve, analytics (billable)
 	cd $(BACKEND) && RUN_PIPELINE_INTEGRATION=1 uv run pytest -m integration -v shared/tests/integration/test_api_live.py
+
+# Reads a value from the root .env (ignoring inline comments).
+dotenv = $(shell sed -n 's/^$(1)=\([^ \#]*\).*/\1/p' .env 2>/dev/null)
+
+test-e2e: samples ## End-to-end on the DEPLOYED dev stack: real sign-in, upload, review, approve, delete (billable)
+	cd $(BACKEND) && \
+	E2E_API_URL="$${E2E_API_URL:-$$(gcloud run services describe receipt-api --project $(call dotenv,GCP_PROJECT_ID) --region us-central1 --format 'value(status.url)')}" \
+	FIREBASE_WEB_API_KEY="$${FIREBASE_WEB_API_KEY:-$(call dotenv,VITE_FIREBASE_API_KEY)}" \
+	RUN_E2E=1 uv run pytest -m integration -v shared/tests/integration/test_e2e_deployed.py
+
+coverage: ## Backend unit tests with a coverage report (fails under the threshold in pyproject.toml)
+	cd $(BACKEND) && uv run pytest --cov --cov-report=term-missing:skip-covered
 
 dataset: ## Generate the labelled synthetic benchmark (150 docs) in evaluation/dataset
 	cd $(BACKEND) && uv run python ../evaluation/synthetic/generate.py
