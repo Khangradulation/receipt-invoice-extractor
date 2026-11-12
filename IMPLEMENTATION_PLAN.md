@@ -24,7 +24,7 @@ A phase is only marked done after its deliverable has been verified.
 | 12 | GitHub Actions CI/CD | Done — dev deploys from main (see Phase log) |
 | 13 | Security | Done — see Phase log |
 | 14 | Monitoring and observability | Done — see Phase log |
-| 15 | Testing (integration + E2E) | Not started |
+| 15 | Testing (integration + E2E) | Done — see Phase log |
 | 16 | Documentation | Not started |
 
 ## Architecture decisions
@@ -741,4 +741,34 @@ messages.
 - No alert has fired yet, so delivery of an alert email hasn't been observed.
 - The new metrics only count log entries written after they were created; their charts fill in
   as documents are processed.
+
+### Phase 15 — Testing (2026-11-12)
+
+Audited the spec's test list. Unit, integration and frontend tests for every item already existed
+from earlier phases (see docs/testing.md for the mapping). Added:
+
+**Built**
+- `test_e2e_deployed.py` / `make test-e2e`: the spec's ten E2E steps against the **deployed**
+  stack, with nothing faked. A throwaway Firebase user signs in via a custom token signed through
+  IAM (no key or password). The test then goes through the deployed API, Cloud Storage, Eventarc,
+  the deployed worker, Gemini, validation, review, approval and BigQuery, then deletes both
+  documents through the API and verifies the file versions, record and rows are gone. The test
+  user is deleted at the end.
+- `api/tests/test_authorization.py`: reads every route from the app's OpenAPI spec. Each one
+  except `/health` must reject missing, forged and non-Bearer tokens without side effects, and
+  each route taking a document ID must 404 for another user's document. The first version read
+  `app.routes`, which this FastAPI version nests, and found 0 routes; the inventory guard caught it.
+- Coverage: `pytest-cov` configured and enforced in `make check` / CI at 90% (current 94.09%);
+  `make coverage` for the per-file report.
+- `docs/testing.md`: spec → test mapping, live test commands, how the E2E test works.
+
+**Verified**
+- `make check`: 437 backend tests (coverage 94.09%), 42 frontend tests, Terraform valid.
+- `make test-e2e` on dev: 1 passed in 130 s (2 Gemini calls).
+
+**Not covered**
+- Browser-level E2E (driving the real UI) is not automated. The UI flows are covered by component
+  tests with a mocked API, and the backend flow by the deployed E2E test.
+- The E2E test isn't run by CI (it's billable and needs Firebase admin rights the CI account
+  doesn't have). Run it manually after significant changes.
 

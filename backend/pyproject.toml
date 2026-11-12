@@ -72,3 +72,13 @@ filterwarnings = [
 markers = [
     "integration: talks to real Google Cloud services (opt-in, may incur cost)",
 ]
+
+# ---------- Coverage (make coverage; enforced in make check / CI) ----------
+[tool.coverage.run]
+source = ["shared/src", "api/src", "worker/src"]
+branch = false
+
+[tool.coverage.report]
+fail_under = 90
+skip_empty = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\.$"]

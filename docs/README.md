@@ -17,3 +17,4 @@ Architecture, setup, deployment, security and evaluation docs. Each phase adds t
 - [deployment.md](deployment.md) — CI/CD workflows, keyless auth, smoke test, releases
 - [security.md](security.md) — security controls, retention and deletion, assumptions, limitations
 - [monitoring.md](monitoring.md) — logs, metrics, dashboard, alerts and first steps
+- [testing.md](testing.md) — automated and live test suites, coverage, the end-to-end test
