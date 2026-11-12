@@ -3,7 +3,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = ">= 6.0, < 8.0"
+      version = ">= 7.0, < 9.0"
     }
   }
   # Remote state in GCS (created by ops/gcp/bootstrap-tfstate.sh). The GCS backend locks state
