@@ -23,7 +23,7 @@ A phase is only marked done after its deliverable has been verified.
 | 11 | Terraform infrastructure | Done — dev applied (see Phase log) |
 | 12 | GitHub Actions CI/CD | Done — dev deploys from main (see Phase log) |
 | 13 | Security | Done — see Phase log |
-| 14 | Monitoring and observability | Not started |
+| 14 | Monitoring and observability | Done — see Phase log |
 | 15 | Testing (integration + E2E) | Not started |
 | 16 | Documentation | Not started |
 
@@ -699,4 +699,46 @@ dependency audits, synthetic-only data. Added in this phase:
 - Signed-in pages under the new CSP (upload, file preview, charts): they need a real sign-in and
   are to be checked on dev after deploy.
 - gitleaks: runs in CI only (running the downloaded binary locally was not permitted).
+- Follow-up: gitleaks passed in CI on PR 13 ("15 commits scanned", "no leaks found"). The
+  Phase 13 deploy (run 43116202141) passed its smoke test, and the live frontend CSP includes the
+  API origin.
+
+### Phase 14 — Monitoring and observability (2026-11-11)
+
+**Built**
+- Structured JSON logging (from Phase 1) audited against the spec's tracking list: every item
+  already had a log event with `document_id` and no contents. New test
+  `worker/tests/test_log_privacy.py` runs the valid, review and failed paths and fails if a
+  merchant, address, amount or filename reaches a log line. (The test fixture's fake event IDs
+  contained the object path; they're now opaque like real Eventarc IDs.)
+- **Log-based metrics:** 12 in total, 8 of them new. New: uploads, processing attempts,
+  processing duration, event retries, worker errors, Gemini errors, review actions, deletions.
+  Existing: documents processed (by status), failures, Gemini latency, BigQuery failures.
+- **Alerts:** 6 in total, with severities and auto-close. New: repeated worker errors, high
+  review rate (PromQL ratio over 6 h with at least 10 documents), API 5xx. Existing:
+  processing failures, Gemini latency, BigQuery failures.
+- **Email:** an email notification channel (`alert_emails`, set in the git-ignored tfvars).
+- **Dashboard:** "Receipt extractor: pipeline" with 17 charts (every metric, API latency,
+  instances, review rate).
+- `docs/monitoring.md`: metrics mapped to the spec, Logs Explorer queries, an alert runbook.
+
+**Fixed:** Phase 13 renamed the log message `bigquery write failed` to `bigquery job failed`, so
+the BigQuery-failure metric and alert had silently stopped matching. The filter now matches both
+messages.
+
+**Verified (dev)**
+- The review-rate PromQL was evaluated against live data before use (2 of 6 documents that day
+  needed review → 0.333). The metric name mapping was confirmed the same way.
+- Apply: the first attempt failed for two reasons, both fixed:
+  - the BigQuery metric couldn't be replaced while an alert used it, so its label was dropped;
+  - new metrics needed time to propagate before alerts could reference them (retried).
+- The dashboard was rejected for a threshold colour; after the fix it was created. Its JSON now
+  matches the API's normalised form, and re-plan shows "No changes".
+- 6 alert policies enabled, each with 1 notification channel; 12 log-based metrics.
+- `make check`: 410 backend tests, 42 frontend tests, both Terraform environments valid.
+
+**Not verified**
+- No alert has fired yet, so delivery of an alert email hasn't been observed.
+- The new metrics only count log entries written after they were created; their charts fill in
+  as documents are processed.
 

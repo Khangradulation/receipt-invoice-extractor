@@ -6,4 +6,5 @@ github_repository = "owner/receipt-invoice-extractor"
 github_owner_id   = "12345678" # gh api users/<owner> -q .id
 developer_members = ["user:you@example.com"]
 # web_origins  = ["http://localhost:5173"]  # default; the frontend's run.app URL is automatic
+# alert_emails = ["you@example.com"]  # monitoring alerts by email
 # notification_channels = ["projects/.../notificationChannels/..."]

@@ -1,4 +1,5 @@
 import io
+import zlib
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -165,7 +166,8 @@ class Env:
         self, name: str, *, generation: int = 1, event_type: str = FINALIZED, bucket: str = BUCKET
     ) -> StorageObjectEvent:
         return StorageObjectEvent(
-            id=f"evt-{name}-{generation}", type=event_type, source="//storage.googleapis.com/x",
+            id=f"evt-{zlib.crc32(name.encode())}-{generation}",  # opaque, like real IDs
+            type=event_type, source="//storage.googleapis.com/x",
             bucket=bucket, name=name, generation=generation, size=None, content_type="image/png",
         )  # fmt: skip
 
